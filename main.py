@@ -9,13 +9,26 @@ import string
 import re
 
 # Global
-labels = list(string.ascii_lowercase)
+Y = None # Set of all possible y's
+len_x = None
+len_Y = None
+phi_dimen = None
 
 def main():
-    """ Setup for both handwriting and text-to-speech mapping problems """
+    """
+    Setup for both handwriting and text-to-speech mapping problems:
+        0. Establish model parameters
+        1. Parse training and testing data
+        2. Train structured perceptron on training data
+        3. Test perceptron on testing data
+
+    Assumptions:
+        0. All data in form "000001010101010101" "label"
+    """
+
+    global len_x, len_Y, Y, phi_dimen
 
     # Perceptron training params
-    phi = lambda x, y: x**2 # TODO: unary features
     R = 20
     eta = 0.01
     MAX = 100
@@ -28,15 +41,40 @@ def main():
                        data_dir + "ocr_fold0_sm_test.txt")]
 
     for raw_train, raw_test in raw_train_test:
+        
         # Parse train & test data
         train = parse_data_file(raw_train)
         test = parse_data_file(raw_test)
+
+        # From data -> joint feature function
+        Y = list(set([y for x, y in train]))
+        len_x = len(train[0][0])
+        len_Y = len(Y)
+
+        phi_dimen = len_x * len_Y
+        phi = phi_func
+
+        # TODO: Remove
+        phi(train[0][0], train[0][1])
+        return
 
         # Train structured perceptron!
         w = ospt(train, phi, R, eta, MAX)
 
         # Test
         # TODO
+
+def phi_func(x, y):
+    """ Joint-feature function """
+
+    vect = np.zeros((phi_dimen, 1))
+    index = Y.index(y)
+
+    x_vect = np.array(x)
+    print(x_vect)
+    # TODO: Insert x
+    
+    return vect
             
 def parse_data_file(file_loc):
     """ Parse raw data into form of [(x_0, y_0), ..., (x_n, y_n)] """
@@ -49,7 +87,8 @@ def parse_data_file(file_loc):
             if not line.strip(): continue
 
             l_toks = line.split("\t")
-            x = l_toks[1][2:] # Trim leading "im" tag
+            x_str = l_toks[1][2:] # Trim leading "im" tag
+            x = [int(c) for c in x_str]
             y = l_toks[2]
             
             data_arr.append((x, y))
@@ -80,7 +119,7 @@ def get_max_one_char(y_hat, w, x):
         # Go through a-z at i-th index
         for c in labels:
             y_temp[i] = c
-            s_new = score(y_temp)
+            s_new = get_score(y_temp, w, x)
             if s_new > s_max:
                 s_max = s_new
                 y_max = y_temp
@@ -97,7 +136,7 @@ def rgs(x, phi, w, R):
 
         # Until convergence
         while True:
-            y_max = get_max_one_char(y_hat)
+            y_max = get_max_one_char(y_hat, w, x)
             if y_max == y_hat: break
             y_hat = y_max
 
@@ -107,7 +146,7 @@ def ospt(D, phi, R, eta, MAX):
     """ Online structured perceptron training """
     
     # Setup weights of scoring function to 0
-    w = 0 # TODO
+    w = np.zeros((phi_dimen, 1))
 
     # Iterate until max iterations or convergence
     for it in range(MAX):
