@@ -92,45 +92,23 @@ def parse_data_file(file_loc):
     data_arr = []
     
     with open(file_loc) as f:
-
-        x = []
-        y = []
-
-        # Take collected of examples (e.g. collection of pairs of
-        # character data x_i matched with the actual character
-        # class y_i) and push into data array
         for line in f:
+            # Skip empty lines
+            if not line.strip(): continue
 
-            # Push single collection of examples onto data array
-            # when newline is encountered
-            if not line.strip():
-                data_arr.append((x, y))
-                x = []
-                y = []
-                continue
-
-            # Parse one example (x_i, y_i)
             l_toks = line.split("\t")
-            x_i_str = l_toks[1][2:] # Trim leading "im" tag
-            x_i = [int(c) for c in x_i_str]
-            y_i = setify(l_toks[2])
-
-            # Take note of all possible labels (i.e. the set Y)
+            x_str = l_toks[1][2:] # Trim leading "im" tag
+            x = [int(c) for c in x_str]
+            y = [l_toks[2]]
+            # Set-ify that number (i.e. remove trailing zeros, as
+            # is automatically done in the alphabet set) for
+            # consistency
+            y[0] = list(set(y[0]))[0]
             alphabet.update(l_toks[2])
-
-            # Add single example to collection
-            x.append(x_i)
-            y.append(y_i)
             
-    return data_arr
+            data_arr.append((x, y))
 
-def setify(num):
-    """
-    Set-ify that number (i.e. remove trailing zeros, as is
-    automatically done in the alphabet set) for consistency
-    """
-    
-    return list(set(num))[0]
+    return data_arr
 
 def get_score(w, phi, x, y_hat):
     return np.dot(w, phi(x, y_hat))
