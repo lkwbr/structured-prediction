@@ -4,6 +4,7 @@
 # CptS 580, HW #1
 # Created 02/08/2017
 
+import pyqtgraph as pg
 import numpy as np
 import random
 import string
@@ -17,7 +18,7 @@ import re
 #   - Alter phi function drastically to accompany word
 
 # Globals
-#Y = [] # Set of all possible y's
+verbose = False
 alphabet = set()
 len_x = -1
 phi_dimen = -1
@@ -59,15 +60,15 @@ def main():
         # From data -> joint feature function
         phi_dimen = len_x * len_y
         phi = phi_func
-
-##        phi(train[0][0], train[0][1])
-##        return
         
         # Train structured perceptron!
         w = ospt(train, phi, R, eta, MAX)
 
         # Test
         # TODO
+
+def dprint(s):
+    if verbose: print(s)
 
 def phi_func(x, y):
     """ Joint-feature function """
@@ -105,7 +106,7 @@ def parse_data_file(file_loc):
         x = []
         y = []
 
-        # Take collected of examples (e.g. collection of pairs of
+        # Take collection of examples (e.g. collection of pairs of
         # character data x_i matched with the actual character
         # class y_i) and push into data array
         for line in f:
@@ -151,13 +152,30 @@ def setify(num):
 def get_score(w, phi, x, y_hat):
     return np.dot(w, phi(x, y_hat))
 
-def get_random_y():
-    return random.sample(alphabet, 1)
+def get_random_y(len_y):
+
+    rand_y = []
+
+    # If no length passed
+    if len_y == None:
+        min_word_len = 2
+        max_word_len = 6
+        rand_word_len = math.floor(random.uniform(min_word_len,
+                                                  max_word_len + 1))
+    else: rand_word_len = len_y
+
+    for i in range(rand_word_len):
+
+        rand_char = random.sample(alphabet, 1)[0]
+        rand_y.append(rand_char)
+    
+    return rand_y
 
 def get_max_one_char(w, phi, x, y_hat):
     """
     Make one-character changes to y_hat, finding which
-    single change produces the best score
+    single change produces the best score; we return
+    that resultant y_max
     """
 
     # Initialize variables to max
@@ -174,23 +192,30 @@ def get_max_one_char(w, phi, x, y_hat):
             
             y_temp[i] = c
             s_new = get_score(w, phi, x, y_temp)
+            
             if s_new > s_max:
                 s_max = s_new
                 y_max = y_temp
     
     return y_max
 
-def rgs(x, phi, w, R):
-    """ Randomized Greedy Search (RGS) inference  """
+def rgs(x, phi, w, R, len_y):
+    """
+    Randomized Greedy Search (RGS) inference:
+    Try and use the current weights to arrive at
+    the correct label; we will always return our
+    best guess
+    """
 
     for i in range(R):
 
         # Initialize best scoring output randomly
-        y_hat = get_random_y()
-        print(y_hat)
+        y_hat = get_random_y(len_y)
+        #print(y_hat)
 
         # Until convergence
         while True:
+            
             y_max = get_max_one_char(w, phi, x, y_hat)
             if y_max == y_hat: break
             y_hat = y_max
@@ -207,6 +232,10 @@ def ospt(D, phi, R, eta, MAX):
     print("\tLearning rate = " + str(eta))
     print("\tMax iteration count = " + str(MAX))
     print()
+
+    # Record model's progress w.r.t. accuracy
+    acc_progress = []
+    pw = pg.plot()
     
     # Setup weights of scoring function to 0
     w = np.zeros((phi_dimen))
@@ -215,39 +244,52 @@ def ospt(D, phi, R, eta, MAX):
     # TODO: Check for convergence
     for it in range(MAX):
 
-        print("[Iteration " + str(it) + "]")
+        print("[Iteration " + str(it) + "]\n")
 
+        train_num = 0
         num_mistakes = 0
         num_correct = 0
         
         # Go through training examples
-        for x, y in D:
+        # TODO: Remove limitation
+        for x, y in D[:100]:
 
-            #print("Running Randomized Greedy Search...")
+            print("\tTraining example #" + str(train_num) + "...")
             
             # Predict
-            y_hat = rgs(x, phi, w, R) 
+            # NOTE: Passing in len(y) so we know what kind of
+            # y_hat to generate randomly at the start
+            y_hat = rgs(x, phi, w, R, len(y))
 
-            # Check error
-            error = y_hat != y
-
-            #print("\ty = " + str(y))
-            #print("\ty_hat = " + str(y_hat))
+            dprint("y = " + str(y))
+            dprint("y_hat = " + str(y_hat))
 
             # If error, update weights
-            if error:
-                #print("Mistake: Updating weights!")
+            if y_hat != y:
+                dprint("Mistake: Updating weights!")
                 w = np.add(w, np.dot(eta, (np.subtract(phi(x, y), phi(x, y_hat)))))
                 num_mistakes += 1
             else:
-                #print("Good: Predicted correctly!")
+                dprint("Good: Predicted correctly!")
                 num_correct += 1
 
+            train_num += 1
+
+        # Determine accuracy
+        accuracy = num_correct / (num_correct + num_mistakes)
+        acc_progress.append(accuracy)
+
+        # Plot accuracy timline
+        if len(acc_progress) > 1:
+            pw.plot(acc_progress, clear=True)
+            pg.QtGui.QApplication.processEvents()
+
         # Report iteration stats
-        print("Number correct = " + str(num_correct))
-        print("Number of mistakes = " + str(num_mistakes))
-        #print(w)
-        return
+        print()
+        print("| Accuracy = " + str(accuracy))
+        print("| Number correct = " + str(num_correct))
+        print("| Number of mistakes = " + str(num_mistakes))
+        print()
     
     return w
 
