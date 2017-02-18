@@ -40,7 +40,7 @@ def main():
     # Perceptron training params
     R = 20
     eta = 0.01
-    MAX = 100
+    MAX = 1
 
     # Raw training and testing data
     data_dir = "data/"
@@ -55,7 +55,7 @@ def main():
         
         # Parse train & test data
         train, len_x, len_y = parse_data_file(raw_train)
-        #test = parse_data_file(raw_test)
+        test, *_ = parse_data_file(raw_test)
 
         # From data -> joint feature function
         phi_dimen = len_x * len_y
@@ -65,7 +65,7 @@ def main():
         w = ospt(train, phi, R, eta, MAX)
 
         # Test
-        # TODO
+        ospt(test, phi, R, 1, 1, w)
 
 def dprint(s):
     if verbose: print(s)
@@ -199,6 +199,13 @@ def get_max_one_char(w, phi, x, y_hat):
     
     return y_max
 
+def list_diff(a, b):
+    """ Show's degree of difference of list a from b """
+    
+    if len(a) != len(b):
+        raise ValueError("Lists of different length.")
+    return sum(i != j for i, j in zip(a, b))
+
 def rgs(x, phi, w, R, len_y):
     """
     Randomized Greedy Search (RGS) inference:
@@ -222,10 +229,21 @@ def rgs(x, phi, w, R, len_y):
 
     return y_hat
 
-def ospt(D, phi, R, eta, MAX):
-    """ Online structured perceptron training """
+def ospt(D, phi, R, eta, MAX, w = None):
+    """
+    Online structured perceptron training/testing:
+    - If weight vector w is not supplied, we're training;
+    - Else, we're testing
+    """
 
-    print("Training Structured Perceptron:")
+    # See if we're training or testing
+    training = w is None
+
+    # Display heading
+    print()
+    if training: print("<Training> ", end = "")
+    else: print("<Testing> ", end = "")
+    print("Structured Perceptron:")
     print()
     print("\tData length = " + str(len(D)))
     print("\tNumber of restarts = " + str(R))
@@ -237,8 +255,9 @@ def ospt(D, phi, R, eta, MAX):
     acc_progress = []
     pw = pg.plot()
     
-    # Setup weights of scoring function to 0
-    w = np.zeros((phi_dimen))
+    # Setup weights of scoring function to 0, if
+    # weight vector is not supplied
+    if training: w = np.zeros((phi_dimen))
 
     # Iterate until max iterations or convergence
     # TODO: Check for convergence
@@ -254,7 +273,7 @@ def ospt(D, phi, R, eta, MAX):
         # TODO: Remove limitation
         for x, y in D[:100]:
 
-            print("\tTraining example #" + str(train_num) + "...")
+            print("\tTraining instance " + str(it) + "." + str(train_num), end = "")
             
             # Predict
             # NOTE: Passing in len(y) so we know what kind of
@@ -266,11 +285,14 @@ def ospt(D, phi, R, eta, MAX):
 
             # If error, update weights
             if y_hat != y:
-                dprint("Mistake: Updating weights!")
-                w = np.add(w, np.dot(eta, (np.subtract(phi(x, y), phi(x, y_hat)))))
+                print(" (WRONG @ " +
+                      str(list_diff(y_hat, y)) + "/" + str(len(y)) + ")")
+                if training:
+                    w = np.add(w, np.dot(eta, (np.subtract(phi(x, y),
+                                                           phi(x, y_hat)))))
                 num_mistakes += 1
             else:
-                dprint("Good: Predicted correctly!")
+                print(" (CORRECT @ " + str(len(y)) + ")")
                 num_correct += 1
 
             train_num += 1
@@ -281,14 +303,16 @@ def ospt(D, phi, R, eta, MAX):
 
         # Plot accuracy timline
         if len(acc_progress) > 1:
-            pw.plot(acc_progress, clear=True)
+            goal_line = pg.InfiniteLine(1, 0)
+            pw.plot(acc_progress, goal_line, clear=True)
             pg.QtGui.QApplication.processEvents()
 
         # Report iteration stats
         print()
-        print("| Accuracy = " + str(accuracy))
-        print("| Number correct = " + str(num_correct))
-        print("| Number of mistakes = " + str(num_mistakes))
+        print("\t| Accuracy = " + str(accuracy))
+        print("\t| Number correct = " + str(num_correct))
+        print("\t| Number of mistakes = " + str(num_mistakes))
+        #print("| Weights = \n" + str(w))
         print()
     
     return w
