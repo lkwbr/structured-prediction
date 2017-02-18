@@ -20,7 +20,6 @@ import re
 #Y = [] # Set of all possible y's
 alphabet = set()
 len_x = -1
-len_Y = -1
 phi_dimen = -1
 
 def main():
@@ -32,10 +31,10 @@ def main():
         3. Test on testing data
 
     Assumptions:
-        0. All data in form "000001010101010101" "label"
+        0. All data in form "000001010101010101..." "[label]"
     """
 
-    global len_x, len_Y, phi_dimen
+    global len_x, phi_dimen
 
     # Perceptron training params
     R = 20
@@ -45,24 +44,25 @@ def main():
     # Raw training and testing data
     data_dir = "data/"
     raw_train_test = [(data_dir + "nettalk_stress_train.txt",
-                       data_dir + "nettalk_stress_test.txt"),
-                      (data_dir + "ocr_fold0_sm_train.txt",
-                       data_dir + "ocr_fold0_sm_test.txt")]
+                       data_dir + "nettalk_stress_test.txt")]
+                      #(data_dir + "ocr_fold0_sm_train.txt",
+                       #data_dir + "ocr_fold0_sm_test.txt")]
 
     for raw_train, raw_test in raw_train_test:
+
+        print("Parsing data...")
         
         # Parse train & test data
-        train = parse_data_file(raw_train)
-        test = parse_data_file(raw_test)
-    
-        # From data -> joint feature function
-        #Y = alphabet #list(set([y for x, y in train]))
-        len_x = len(train[0][0])
-        len_Y = len(alphabet)
+        train, len_x, len_y = parse_data_file(raw_train)
+        #test = parse_data_file(raw_test)
 
-        phi_dimen = len_x * len_Y
+        # From data -> joint feature function
+        phi_dimen = len_x * len_y
         phi = phi_func
 
+##        phi(train[0][0], train[0][1])
+##        return
+        
         # Train structured perceptron!
         w = ospt(train, phi, R, eta, MAX)
 
@@ -73,14 +73,22 @@ def phi_func(x, y):
     """ Joint-feature function """
 
     vect = np.zeros((phi_dimen))
-    # NOTE: Depending on list-ification of set
-    # to provide consistent indices for each element
-    index = list(alphabet).index(y[0])
-    x_vect = np.array(x)
 
-    # Manual insertion of x into standard vector
-    y_target = len(x) * index
-    for i in range(len(x)): vect[i + y_target] = x_vect[i]
+    for i in range(len(x)):
+
+        x_i = x[i]
+        y_i = y[i]
+
+        alpha_list = list(alphabet)
+        # Sorting keeps consistency of indices with respect to
+        # all prior and following phi(x, y) vectors
+        alpha_list.sort() 
+        index = alpha_list.index(y_i)
+        x_vect = np.array(x_i)
+
+        # Manual insertion of x into standard vector
+        y_target = len(x_i) * index
+        for j in range(len(x_i)): vect[j + y_target] = x_vect[j]
     
     return vect
             
@@ -90,6 +98,7 @@ def parse_data_file(file_loc):
     global alphabet
 
     data_arr = []
+    len_x_vect = -1
     
     with open(file_loc) as f:
 
@@ -115,14 +124,21 @@ def parse_data_file(file_loc):
             x_i = [int(c) for c in x_i_str]
             y_i = setify(l_toks[2])
 
+            # Collect length of all x_i's
+            if len_x_vect < 0: len_x_vect = len(x_i)
+
             # Take note of all possible labels (i.e. the set Y)
-            alphabet.update(l_toks[2])
+            # NOTE: listifying y_i is necessary to keep leading
+            # zeroes, e.g. maintaining '04' rather than '4'
+            alphabet.update([y_i])
 
             # Add single example to collection
             x.append(x_i)
             y.append(y_i)
+
+    num_labels = len(alphabet)
             
-    return data_arr
+    return data_arr, len_x_vect, num_labels
 
 def setify(num):
     """
@@ -130,7 +146,7 @@ def setify(num):
     automatically done in the alphabet set) for consistency
     """
     
-    return list(set(num))[0]
+    return list(set([num]))[0]
 
 def get_score(w, phi, x, y_hat):
     return np.dot(w, phi(x, y_hat))
