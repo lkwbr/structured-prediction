@@ -104,8 +104,9 @@ def phi_unary(x, y):
         x_vect = np.array(x_i)
 
         # Manual insertion of x into standard vector
+        # NOTE: Holy fuck, had "= x_vect[j]" before, not "+="
         y_target = len(x_i) * index
-        for j in range(len(x_i)): vect[j + y_target] = x_vect[j]
+        for j in range(len(x_i)): vect[j + y_target] += x_vect[j]
 
     return vect
 
