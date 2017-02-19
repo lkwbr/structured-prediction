@@ -7,10 +7,12 @@
 import pyqtgraph as pg
 import numpy as np
 import random
+import signal
 import string
 import math
 import time
 import copy
+import sys
 import re
 
 # TODO:
@@ -20,9 +22,10 @@ import re
 # Globals
 w_file_name = "w"       # Perceptron weight storage
 verbose = False         # Debug output control
-alphabet = set()        # Set of label's alphabet 
+alphabet = set()        # Set of label's alphabet
 len_x = -1
 phi_dimen = -1
+weights = []
 
 def main():
     """
@@ -38,11 +41,14 @@ def main():
 
     global len_x, phi_dimen
 
+    # Save weights on Ctrl-C
+    signal.signal(signal.SIGINT, signal_handler)
+
     # Perceptron training params
     R = 20
     eta = 0.01
-    MAX = 2
-    L = 1
+    MAX = 20
+    L = 200
 
     # Raw training and testing data
     data_dir = "data/"
@@ -65,6 +71,7 @@ def main():
 
         # Train structured perceptron!
         w = ospt(train, phi, R, eta, MAX, L)
+        #w = load_w() # NOTE: Overwriting previous w
 
         # Test
         ospt(test, phi, R, 1, 1, L, w)
@@ -101,6 +108,14 @@ def phi_unary(x, y):
         for j in range(len(x_i)): vect[j + y_target] = x_vect[j]
 
     return vect
+
+def signal_handler(signal, frame):
+    """ Save weights on Ctrl+C """
+
+    # NOTE: Made weights referencable globally to make things easy
+    print('[Ctrl+C pressed]')
+    save_w(weights)
+    exit(0)
 
 def parse_data_file(file_loc):
     """ Parse raw data into form of [(x_0, y_0), ..., (x_n, y_n)] """
@@ -306,6 +321,7 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
                 if training:
                     w = np.add(w, np.dot(eta, (np.subtract(phi(x, y),
                                                            phi(x, y_hat)))))
+                    weights = w # HACK: This might be too much
                 num_mistakes += 1
             else:
                 instance_str = "\t[+]" + instance_str + " (" + str(len(y)) + "/" + str(len(y)) + ")"
@@ -333,9 +349,6 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
         print("\t--- " + str(time.clock() - it_start) + "s")
         print()
 
-        # Save weights at end of iteration
-        save_w(w)
-
     # Return and save weights!
     return save_w(w)
 
@@ -346,7 +359,7 @@ def save_w(w):
     np.save(w_file_name, w)
     return w
 
-def load_w(w):
+def load_w():
     """ Deserialize weights of perceptron from local file """
 
     print("Loading weights from local file...")
