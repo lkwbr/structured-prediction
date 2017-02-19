@@ -9,18 +9,18 @@ import numpy as np
 import random
 import string
 import math
+import time
 import copy
 import re
 
 # TODO:
-#   - Get RGS and training working with just one character!
-#   - Start parsing entire word from data (not just character)
-#   - Alter phi function drastically to accompany word
+#   - Move structured perceptron to class, removing need for globals
+#       and other annoying things
 
 # Globals
-w_file_name = "w"    # perceptron weight storage
-verbose = False         # block or allow lots of debug printing
-alphabet = set()
+w_file_name = "w"       # Perceptron weight storage
+verbose = False         # Debug output control
+alphabet = set()        # Set of label's alphabet 
 len_x = -1
 phi_dimen = -1
 
@@ -41,17 +41,17 @@ def main():
     # Perceptron training params
     R = 20
     eta = 0.01
-    MAX = 20
-    L = 200
+    MAX = 2
+    L = 1
 
     # Raw training and testing data
     data_dir = "data/"
     raw_train_test = [(data_dir + "nettalk_stress_train.txt",
-                       data_dir + "nettalk_stress_test.txt")]
-                      #(data_dir + "ocr_fold0_sm_train.txt",
-                       #data_dir + "ocr_fold0_sm_test.txt")]
+                       data_dir + "nettalk_stress_test.txt"),
+                      (data_dir + "ocr_fold0_sm_train.txt",
+                       data_dir + "ocr_fold0_sm_test.txt")]
 
-    for raw_train, raw_test in raw_train_test:
+    for raw_train, raw_test in raw_train_test[1:]:
 
         print("Parsing data...")
 
@@ -61,7 +61,7 @@ def main():
 
         # From data -> joint feature function
         phi_dimen = len_x * len_y
-        phi = phi_func
+        phi = phi_unary
 
         # Train structured perceptron!
         w = ospt(train, phi, R, eta, MAX, L)
@@ -69,10 +69,17 @@ def main():
         # Test
         ospt(test, phi, R, 1, 1, L, w)
 
+        # Clear proverbial canvas for other types of data
+        reset_data_vars()
+
+def reset_data_vars():
+    global alphabet
+    alphabet = set()
+
 def dprint(s):
     if verbose: print(s)
 
-def phi_func(x, y):
+def phi_unary(x, y):
     """ Joint-feature function """
 
     vect = np.zeros((phi_dimen))
@@ -254,6 +261,7 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
     print("\tNumber of restarts = " + str(R))
     print("\tLearning rate = " + str(eta))
     print("\tMax iteration count = " + str(MAX))
+    print("\tNumber of joint-features = " + str(phi_dimen))
     print()
 
     # Record model's progress w.r.t. accuracy
@@ -267,6 +275,9 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
     # Iterate until max iterations or convergence
     # TODO: Check for convergence
     for it in range(MAX):
+
+        # Time each iteration
+        it_start = time.clock()
 
         print("[Iteration " + str(it) + "]\n")
 
@@ -291,14 +302,16 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
 
             # If error, update weights
             if y_hat != y:
-                instance_str = "\t" + instance_str + " (WRONG @ " + str(list_diff(y_hat, y)) + "/" + str(len(y)) + ")"
+                instance_str = "\t[-] " + instance_str + " (" + str(len(y) - list_diff(y_hat, y)) + "/" + str(len(y)) + ")"
                 if training:
                     w = np.add(w, np.dot(eta, (np.subtract(phi(x, y),
                                                            phi(x, y_hat)))))
                 num_mistakes += 1
             else:
-                instance_str = "\t" + "<" + (instance_str + " (CORRECT @ " + str(len(y)) + ")") + ">"
+                instance_str = "\t[+]" + instance_str + " (" + str(len(y)) + "/" + str(len(y)) + ")"
                 num_correct += 1
+
+            instance_str += "\t[" + str(num_correct) + "/" + str(train_num + 1) + "]"
 
             print(instance_str)
             train_num += 1
@@ -317,6 +330,7 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
         print("\t| Accuracy = " + str(accuracy))
         print("\t| Number correct = " + str(num_correct))
         print("\t| Number of mistakes = " + str(num_mistakes))
+        print("\t--- " + str(time.clock() - it_start) + "s")
         print()
 
         # Save weights at end of iteration
@@ -328,17 +342,15 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
 def save_w(w):
     """ Serialize the weights of perceptron into local file """
 
-    #w_file = open(w_file_name, "w")
+    print("Saving weights to local file...")
     np.save(w_file_name, w)
-
     return w
 
 def load_w(w):
     """ Deserialize weights of perceptron from local file """
 
-    #w_file = open(w_file_name, "r")
+    print("Loading weights from local file...")
     w = np.load(w_file_name)
-
     return w
 
 # Party = started
