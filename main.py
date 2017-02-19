@@ -18,7 +18,8 @@ import re
 #   - Alter phi function drastically to accompany word
 
 # Globals
-verbose = False
+w_file_name = "w"    # perceptron weight storage
+verbose = False         # block or allow lots of debug printing
 alphabet = set()
 len_x = -1
 phi_dimen = -1
@@ -40,7 +41,8 @@ def main():
     # Perceptron training params
     R = 20
     eta = 0.01
-    MAX = 1
+    MAX = 20
+    L = 200
 
     # Raw training and testing data
     data_dir = "data/"
@@ -52,7 +54,7 @@ def main():
     for raw_train, raw_test in raw_train_test:
 
         print("Parsing data...")
-        
+
         # Parse train & test data
         train, len_x, len_y = parse_data_file(raw_train)
         test, *_ = parse_data_file(raw_test)
@@ -60,12 +62,12 @@ def main():
         # From data -> joint feature function
         phi_dimen = len_x * len_y
         phi = phi_func
-        
+
         # Train structured perceptron!
-        w = ospt(train, phi, R, eta, MAX)
+        w = ospt(train, phi, R, eta, MAX, L)
 
         # Test
-        ospt(test, phi, R, 1, 1, w)
+        ospt(test, phi, R, 1, 1, L, w)
 
 def dprint(s):
     if verbose: print(s)
@@ -83,16 +85,16 @@ def phi_func(x, y):
         alpha_list = list(alphabet)
         # Sorting keeps consistency of indices with respect to
         # all prior and following phi(x, y) vectors
-        alpha_list.sort() 
+        alpha_list.sort()
         index = alpha_list.index(y_i)
         x_vect = np.array(x_i)
 
         # Manual insertion of x into standard vector
         y_target = len(x_i) * index
         for j in range(len(x_i)): vect[j + y_target] = x_vect[j]
-    
+
     return vect
-            
+
 def parse_data_file(file_loc):
     """ Parse raw data into form of [(x_0, y_0), ..., (x_n, y_n)] """
 
@@ -100,7 +102,7 @@ def parse_data_file(file_loc):
 
     data_arr = []
     len_x_vect = -1
-    
+
     with open(file_loc) as f:
 
         x = []
@@ -138,7 +140,7 @@ def parse_data_file(file_loc):
             y.append(y_i)
 
     num_labels = len(alphabet)
-            
+
     return data_arr, len_x_vect, num_labels
 
 def setify(num):
@@ -146,7 +148,7 @@ def setify(num):
     Set-ify that number (i.e. remove trailing zeros, as is
     automatically done in the alphabet set) for consistency
     """
-    
+
     return list(set([num]))[0]
 
 def get_score(w, phi, x, y_hat):
@@ -168,7 +170,7 @@ def get_random_y(len_y):
 
         rand_char = random.sample(alphabet, 1)[0]
         rand_y.append(rand_char)
-    
+
     return rand_y
 
 def get_max_one_char(w, phi, x, y_hat):
@@ -189,19 +191,19 @@ def get_max_one_char(w, phi, x, y_hat):
 
         # Go through a-z at i-th index
         for c in alphabet:
-            
+
             y_temp[i] = c
             s_new = get_score(w, phi, x, y_temp)
-            
+
             if s_new > s_max:
                 s_max = s_new
                 y_max = y_temp
-    
+
     return y_max
 
 def list_diff(a, b):
     """ Show's degree of difference of list a from b """
-    
+
     if len(a) != len(b):
         raise ValueError("Lists of different length.")
     return sum(i != j for i, j in zip(a, b))
@@ -218,18 +220,17 @@ def rgs(x, phi, w, R, len_y):
 
         # Initialize best scoring output randomly
         y_hat = get_random_y(len_y)
-        #print(y_hat)
 
         # Until convergence
         while True:
-            
+
             y_max = get_max_one_char(w, phi, x, y_hat)
             if y_max == y_hat: break
             y_hat = y_max
 
     return y_hat
 
-def ospt(D, phi, R, eta, MAX, w = None):
+def ospt(D, phi, R, eta, MAX, L, w = None):
     """
     Online structured perceptron training/testing:
     - If weight vector w is not supplied, we're training;
@@ -238,14 +239,18 @@ def ospt(D, phi, R, eta, MAX, w = None):
 
     # See if we're training or testing
     training = w is None
+    if training: work_word = "Train"
+    else: work_word = "Test"
+
+    # Check data limit
+    if L is None: L = len(D)
 
     # Display heading
     print()
-    if training: print("<Training> ", end = "")
-    else: print("<Testing> ", end = "")
+    print("<" + work_word + "> ", end = "")
     print("Structured Perceptron:")
     print()
-    print("\tData length = " + str(len(D)))
+    print("\tData length (with limitation) = " + str(L))
     print("\tNumber of restarts = " + str(R))
     print("\tLearning rate = " + str(eta))
     print("\tMax iteration count = " + str(MAX))
@@ -254,7 +259,7 @@ def ospt(D, phi, R, eta, MAX, w = None):
     # Record model's progress w.r.t. accuracy
     acc_progress = []
     pw = pg.plot()
-    
+
     # Setup weights of scoring function to 0, if
     # weight vector is not supplied
     if training: w = np.zeros((phi_dimen))
@@ -268,13 +273,14 @@ def ospt(D, phi, R, eta, MAX, w = None):
         train_num = 0
         num_mistakes = 0
         num_correct = 0
-        
-        # Go through training examples
-        # TODO: Remove limitation
-        for x, y in D[:100]:
 
-            print("\tTraining instance " + str(it) + "." + str(train_num), end = "")
-            
+        # Go through training examples
+        # NOTE: Limitation L on data D exists to speedup training/testing
+        # when desired
+        for x, y in D[:L]:
+
+            instance_str = work_word + " instance " + str(it) + "." + str(train_num)
+
             # Predict
             # NOTE: Passing in len(y) so we know what kind of
             # y_hat to generate randomly at the start
@@ -285,16 +291,16 @@ def ospt(D, phi, R, eta, MAX, w = None):
 
             # If error, update weights
             if y_hat != y:
-                print(" (WRONG @ " +
-                      str(list_diff(y_hat, y)) + "/" + str(len(y)) + ")")
+                instance_str = "\t" + instance_str + " (WRONG @ " + str(list_diff(y_hat, y)) + "/" + str(len(y)) + ")"
                 if training:
                     w = np.add(w, np.dot(eta, (np.subtract(phi(x, y),
                                                            phi(x, y_hat)))))
                 num_mistakes += 1
             else:
-                print(" (CORRECT @ " + str(len(y)) + ")")
+                instance_str = "\t" + "<" + (instance_str + " (CORRECT @ " + str(len(y)) + ")") + ">"
                 num_correct += 1
 
+            print(instance_str)
             train_num += 1
 
         # Determine accuracy
@@ -303,8 +309,7 @@ def ospt(D, phi, R, eta, MAX, w = None):
 
         # Plot accuracy timline
         if len(acc_progress) > 1:
-            goal_line = pg.InfiniteLine(1, 0)
-            pw.plot(acc_progress, goal_line, clear=True)
+            pw.plot(acc_progress, clear = True)
             pg.QtGui.QApplication.processEvents()
 
         # Report iteration stats
@@ -312,9 +317,28 @@ def ospt(D, phi, R, eta, MAX, w = None):
         print("\t| Accuracy = " + str(accuracy))
         print("\t| Number correct = " + str(num_correct))
         print("\t| Number of mistakes = " + str(num_mistakes))
-        #print("| Weights = \n" + str(w))
         print()
-    
+
+        # Save weights at end of iteration
+        save_w(w)
+
+    # Return and save weights!
+    return save_w(w)
+
+def save_w(w):
+    """ Serialize the weights of perceptron into local file """
+
+    #w_file = open(w_file_name, "w")
+    np.save(w_file_name, w)
+
+    return w
+
+def load_w(w):
+    """ Deserialize weights of perceptron from local file """
+
+    #w_file = open(w_file_name, "r")
+    w = np.load(w_file_name)
+
     return w
 
 # Party = started
