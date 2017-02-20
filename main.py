@@ -6,6 +6,7 @@
 
 import pyqtgraph as pg
 import numpy as np
+import winsound
 import random
 import signal
 import string
@@ -32,7 +33,7 @@ sig = False             # See if a signal is already being handled
 def main():
     """
     Main: driver function
-    
+
     Setup for both handwriting and text-to-speech mapping problems:
         0. Establish model parameters
         1. Parse training and testing data
@@ -54,8 +55,8 @@ def main():
     # Perceptron training params
     R = 20
     eta = 0.01
-    MAX = 20 #100
-    L = 20 #None
+    MAX = 100
+    L = None
 
     # Raw training and testing data
     data_dir = "data/"
@@ -63,8 +64,9 @@ def main():
                        data_dir + "nettalk_stress_test.txt"),
                       (data_dir + "ocr_fold0_sm_train.txt",
                        data_dir + "ocr_fold0_sm_test.txt")]
+    data_limit = len(raw_train_test)
 
-    for raw_train, raw_test in raw_train_test[:1]:
+    for raw_train, raw_test in raw_train_test[:data_limit]:
 
         print()
         print("Parsing training and testing data:")
@@ -223,7 +225,7 @@ def rgs(x, phi, w, R, len_y):
         # Until convergence
         while True:
 
-            # Get max char 
+            # Get max char
             y_max = get_max_one_char(w, phi, x, y_hat)
             if y_max == y_hat: break
             y_hat = y_max
@@ -354,6 +356,16 @@ def setify(num):
 
     return list(set([num]))[0]
 
+def beep():
+    """ Give absent-minded programmer a notification """
+
+    freq = 700  # Hz
+    dur = 1000  # ms
+    for i in range(10):
+        winsound.Beep(freq, dur)
+        freq += 100
+    winsound.Beep(freq * 2, dur * 4) # RRRREEEEEEEEEEE!
+
 def list_diff(a, b):
     """ Show's degree of difference of list a from b """
 
@@ -372,6 +384,9 @@ def save_w(w):
     print("-" * 35)
     print("Saving weights to local file...")
 
+    # Get user's attention
+    beep()
+
     # Ask if they want to save
     if (input("Proceed? (y/n): ").strip() == "n"): exit(0)
 
@@ -386,7 +401,7 @@ def save_w(w):
     np.save(w_file_name, w)
     print("Saved!")
     print("-" * 35)
-    
+
     return w
 
 def load_w():
@@ -408,7 +423,7 @@ def load_w():
     w = np.load(w_file_name)
     print("File loaded!")
     print("-" * 35)
-    
+
     return w
 
 def signal_handler(signal, frame):
@@ -418,7 +433,7 @@ def signal_handler(signal, frame):
 
     # Check for the double Ctrl+C, which means exit
     if sig is True: exit(0)
-    
+
     sig = True
     print('[Ctrl+C pressed]')
     save_w(weights)
