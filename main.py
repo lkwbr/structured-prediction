@@ -6,7 +6,7 @@
 
 import pyqtgraph as pg
 import numpy as np
-import winsound
+#import winsound
 import random
 import signal
 import string
@@ -18,21 +18,27 @@ import re
 import os
 
 # TODO:
-#   - Move structured perceptron to class, removing need for globals
-#     and other annoying things
-
+#   - Pairwise features!
+#   - Code Hamming loss
+#   - Let program run on both handwriting and text-to-speech
+#     data, gathering all the right information in the end.
+#   - Compare my program with legitamite other programs
 
 # Globals
 verbose = False         # Debug output control
 alphabet = set()        # Set of label's alphabet
 len_x = -1
 phi_dimen = -1
+pairwise_base_index = -1
+pairs = []
 weights = []
 sig = False             # See if a signal is already being handled
 
 def main():
     """
     Main: driver function
+
+    Data: handwriting and text-to-speech
 
     Setup for both handwriting and text-to-speech mapping problems:
         0. Establish model parameters
@@ -66,12 +72,13 @@ def main():
                        data_dir + "ocr_fold0_sm_test.txt")]
     data_limit = len(raw_train_test)
 
-    for raw_train, raw_test in raw_train_test[:data_limit]:
+    for raw_train, raw_test in raw_train_test[:1]: #[1:]: #[:data_limit]:
 
         print()
         print("Parsing training and testing data:")
         print("\t" + raw_train)
         print("\t" + raw_test)
+        print("Done parsing!")
         print()
 
         # Parse train & test data
@@ -80,7 +87,7 @@ def main():
 
         # From data -> joint feature function; detect and
         # set phi_dimen dynamically
-        phi = phi_unary
+        phi = phi_pairwise #phi_unary
         phi_dimen = len(phi(train[0][0], train[0][1], len_x, len_y))
 
         # Train structured perceptron!
@@ -93,6 +100,8 @@ def main():
 
         # Clear proverbial canvas
         reset_data_vars()
+
+    return
 
 
 """
@@ -134,8 +143,8 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
     acc_progress = []
     if training: pw = pg.plot()
 
-    # Setup weights of scoring function to 0, if
-    # weight vector is not supplied
+    # Setup weights of scoring function to 0, if weight vector is
+    # not supplied
     if training: w = np.zeros((phi_dimen))
 
     # Iterate until max iterations or convergence
@@ -199,7 +208,7 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
 
         # Report iteration stats
         print()
-        print("\t| Accuracy = " + str(accuracy))
+        print("\t| Accuracy = " + str(accuracy) + "%")
         print("\t| Number correct = " + str(num_correct))
         print("\t| Number of mistakes = " + str(num_mistakes))
         print("\t| Time = ~" + str(round((time.clock() - it_start) / 60)) + " min")
@@ -212,9 +221,8 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
 def rgs(x, phi, w, R, len_y):
     """
     Randomized Greedy Search (RGS) inference:
-    Try and use the current weights to arrive at
-    the correct label; we will always return our
-    best guess
+    Try and use the current weights to arrive at the correct label;
+    we will always return our best guess
     """
 
     for i in range(R):
@@ -258,27 +266,59 @@ def phi_unary(x, y, len_x = None, len_y = None):
 
     return vect
 
-def phi_pairwise(x, y):
-    """ Pairwise joint-feature function """
+def phi_pairwise(x, y, len_x = None, len_y = None):
+    """
+    Pairwise joint-feature function:
+        0. Do unary features
+        1. Capture all two-char permutations
+        2. Assign these permuations consistent indices
+        3. Count frequencies of each permuation and update vector
+           at that index
+    """
 
-    vect = np.zeros((phi_dimen))
+    global pairwise_base_index, pairs
+
+    # NOTE: len_y = len(alphabet)
+    # Initial setting of phi dimensions
+    if len_x is None: dimen = phi_dimen
+    else:
+        pairwise_base_index = len_x * len_y
+        dimen = (len_x * len_y) + (len_y ** 2)
+        
+    vect = np.zeros((dimen))
+    alpha_list = list(alphabet)
+    alpha_list.sort()
 
     for i in range(len(x)):
 
         x_i = x[i]
         y_i = y[i]
 
-        alpha_list = list(alphabet)
-        # Sorting keeps consistency of indices with respect to
-        # all prior and following phi(x, y) vectors
-        alpha_list.sort()
+        # Unary features
         index = alpha_list.index(y_i)
         x_vect = np.array(x_i)
-
-        # Manual insertion of x into standard vector
-        # NOTE: Holy fuck, had "= x_vect[j]" before, not "+="
         y_target = len(x_i) * index
         for j in range(len(x_i)): vect[j + y_target] += x_vect[j]
+
+    # Generate pair-index object
+    if len(pairs) == 0:
+        for a in alpha_list:
+            for b in alpha_list:
+                p = a + b
+                pairs.append(p)
+
+    # Pairwise features  
+    for i in range(len(y) - 1):
+        
+        # Get pair index
+        a = y[i]
+        b = y[i + 1]
+        p = a + b
+        comb_index = pairs.index(p)
+        vect_index = pairwise_base_index + comb_index
+
+        # Update occurace of pair
+        vect[vect_index] += 1
 
     return vect
 
@@ -323,9 +363,11 @@ def get_max_one_char(w, phi, x, y_hat):
         # Go through a-z at i-th index
         for c in alphabet:
 
+            # Get score of 1-char change
             y_temp[i] = c
             s_new = get_score(w, phi, x, y_temp)
 
+            # Capture highest-scoring change
             if s_new > s_max:
                 s_max = s_new
                 y_max = y_temp
@@ -337,8 +379,8 @@ def get_max_one_char(w, phi, x, y_hat):
 UTILITY FUNCTIONS
 
 Methods not directly relevant to the concept of the structured
-percpetron, but more to the maintainance and computation of
-the program
+percpetron, but more to the maintainance and assistance of
+more basic computation in program
 """
 
 def reset_data_vars():
@@ -472,11 +514,14 @@ def parse_data_file(file_loc):
             x_i = [int(c) for c in x_i_str]
             y_i = setify(l_toks[2])
 
+            # TODO: Remove
+            if y_i not in ["i", "a", "m"]: continue
+
             # Collect length of all x_i's
             if len_x_vect < 0: len_x_vect = len(x_i)
 
             # Take note of all possible labels (i.e. the set Y)
-            # NOTE: listifying y_i is necessary to keep leading
+            # NOTE: Listifying y_i is necessary to keep leading
             # zeroes, e.g. maintaining '04' rather than '4'
             alphabet.update([y_i])
 
