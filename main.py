@@ -79,10 +79,10 @@ def main():
     np.set_printoptions(threshold = np.inf)
 
     # Perceptron training params
-    R = 20
+    R = [10, 25, 50, 100, 200][1]
     eta = 0.01
     MAX = 100
-    L = None
+    L = 100 #None
 
     # Raw training and testing data
     data_dir = "data/"
@@ -90,7 +90,7 @@ def main():
                        data_dir + "nettalk_stress_test.txt"),
                       (data_dir + "ocr_fold0_sm_train.txt",
                        data_dir + "ocr_fold0_sm_test.txt")]
-    data_limit = len(raw_train_test)
+    data_limit = 1 #len(raw_train_test)
 
     for raw_train, raw_test in raw_train_test[:data_limit]:
 
@@ -108,7 +108,7 @@ def main():
 
         # From data -> joint feature function; detect and
         # set phi_dimen dynamically
-        phi = [phi_unary, phi_pairwise, phi_third_order, phi_fourth_order][3]
+        phi = [phi_unary, phi_pairwise, phi_third_order, phi_fourth_order][1]
         phi_dimen = len(phi(train[0][0], train[0][1], len_x, len_y))
     
         # NOTE: We can either train for weights, or load them
