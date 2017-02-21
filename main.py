@@ -36,8 +36,10 @@ len_x = -1
 phi_dimen = -1
 pairwise_base_index = -1
 triplet_base_index = -1
+quadruplet_base_index = -1
 pairs = []
 triplets = []
+quadruplets = []
 
 # Scoring function (weights)
 weights = []
@@ -97,7 +99,7 @@ def main():
 
         # From data -> joint feature function; detect and
         # set phi_dimen dynamically
-        phi = [phi_unary, phi_pairwise, phi_third_order][2]
+        phi = [phi_unary, phi_pairwise, phi_third_order, phi_fourth_order][3]
         phi_dimen = len(phi(train[0][0], train[0][1], len_x, len_y))
     
         # TODO: Remove test
@@ -349,9 +351,9 @@ def phi_third_order(x, y, len_x = None, len_y = None):
     Third-order joint-feature function:
         0. Do unary features
         1. Do pairwise features
-        1. Capture all three-char permutations
-        2. Assign these permuations consistent indices
-        3. Count frequencies of each permuation and update vector
+        2. Capture all three-char permutations
+        3. Assign these permuations consistent indices
+        4. Count frequencies of each permuation and update vector
            at that index
     """
 
@@ -421,6 +423,110 @@ def phi_third_order(x, y, len_x = None, len_y = None):
 
         # Update occurace of pair
         #print(t, "occurs at", vect_index)
+        vect[vect_index] += 1
+
+    return vect
+
+def phi_fourth_order(x, y, len_x = None, len_y = None):
+    """
+    Fourth-order joint-feature function:
+        0. Do unary features
+        1. Do pairwise features
+        2. Do third-order features
+        3. Capture all four-char permutations
+        4. Assign these permuations consistent indices
+        5. Count frequencies of each permuation and update vector
+           at that index
+    """
+
+    global pairwise_base_index, triplet_base_index, quadruplet_base_index, pairs, triplets
+
+    # NOTE: len_y = len(alphabet)
+    # Initial setting of phi dimensions
+    if len_x is None: dimen = phi_dimen
+    else:
+        pairwise_base_index = len_x * len_y
+        triplet_base_index = pairwise_base_index + (len_y ** 2) 
+        quadruplet_base_index = triplet_base_index + (len_y ** 3)
+        dimen = quadruplet_base_index + (len_y ** 4) 
+        
+    vect = np.zeros((dimen))
+    alpha_list = list(alphabet)
+    alpha_list.sort()
+    
+    # (One-time) Generate pair, triplet, and quadruplet lists
+    if len(triplets) == 0:
+        for a in alpha_list:
+            for b in alpha_list:
+                # Grab pair
+                p = a + b
+                pairs.append(p)
+        
+                for c in alpha_list:
+                    # Grab triplet
+                    t = a + b + c
+                    triplets.append(t)
+
+                    for d in alpha_list:
+                        # Grab quadruplet
+                        q = a + b + c + d
+                        quadruplets.append(q) 
+
+    # Unary features
+    for i in range(len(x)):
+
+        x_i = x[i]
+        y_i = y[i]
+
+        # Unary features
+        index = alpha_list.index(y_i)
+        x_vect = np.array(x_i)
+        y_target = len(x_i) * index
+        for j in range(len(x_i)): vect[j + y_target] += x_vect[j]
+
+    # Pairwise features  
+    for i in range(len(y) - 1):
+        
+        # Get pair index
+        a = y[i]
+        b = y[i + 1]
+        p = a + b
+        comb_index = pairs.index(p)
+        vect_index = pairwise_base_index + comb_index
+
+        # Update occurace of pair
+        #print(p, "occurs at", vect_index)
+        vect[vect_index] += 1
+
+    # Third-order features  
+    for i in range(len(y) - 2):
+        
+        # Get pair index
+        a = y[i]
+        b = y[i + 1]
+        c = y[i + 2]
+        t = a + b + c
+        comb_index = triplets.index(t)
+        vect_index = triplet_base_index + comb_index
+
+        # Update occurace of pair
+        #print(t, "occurs at", vect_index)
+        vect[vect_index] += 1
+
+    # Fourth-order features  
+    for i in range(len(y) - 3):
+        
+        # Get pair index
+        a = y[i]
+        b = y[i + 1]
+        c = y[i + 2]
+        d = y[i + 3]
+        q = a + b + c + d
+        comb_index = quadruplets.index(q)
+        vect_index = quadruplet_base_index + comb_index
+
+        # Update occurace of pair
+        #print(q, "occurs at", vect_index)
         vect[vect_index] += 1
 
     return vect
