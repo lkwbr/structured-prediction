@@ -24,15 +24,24 @@ import os
 #     data, gathering all the right information in the end.
 #   - Compare my program with legitamite other programs
 
-# Globals
+# Debugging 
 verbose = False         # Debug output control
+sig = False             # See if a signal is already being handled
+
+# Model
 alphabet = set()        # Set of label's alphabet
+
+# Phi-related
 len_x = -1
 phi_dimen = -1
 pairwise_base_index = -1
+triplet_base_index = -1
 pairs = []
+triplets = []
+
+# Scoring function (weights)
 weights = []
-sig = False             # See if a signal is already being handled
+weights_dir = "weights/"
 
 def main():
     """
@@ -72,23 +81,29 @@ def main():
                        data_dir + "ocr_fold0_sm_test.txt")]
     data_limit = len(raw_train_test)
 
-    for raw_train, raw_test in raw_train_test[:1]: #[1:]: #[:data_limit]:
+    for raw_train, raw_test in raw_train_test[:1]: #[:data_limit]:
 
         print()
         print("Parsing training and testing data:")
         print("\t" + raw_train)
         print("\t" + raw_test)
-        print("Done parsing!")
-        print()
 
         # Parse train & test data
         train, len_x, len_y = parse_data_file(raw_train)
         test, *_ = parse_data_file(raw_test)
 
+        print("Done parsing!")
+        print()
+
         # From data -> joint feature function; detect and
         # set phi_dimen dynamically
-        phi = phi_pairwise #phi_unary
+        phi = [phi_unary, phi_pairwise, phi_third_order][2]
         phi_dimen = len(phi(train[0][0], train[0][1], len_x, len_y))
+    
+        # TODO: Remove test
+        #ex = phi(train[0][0], train[0][1], len_x, len_y)
+        #print(ex)
+        #return
 
         # Train structured perceptron!
         # NOTE: We can either train for weights, or load them
@@ -148,7 +163,6 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
     if training: w = np.zeros((phi_dimen))
 
     # Iterate until max iterations or convergence
-    # TODO: Check for convergence
     for it in range(MAX):
 
         # Time each iteration
@@ -161,26 +175,25 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
         num_correct = 0
 
         # Go through training examples
-        # NOTE: Limitation L on data D exists to speedup training/testing
-        # when desired
         for x, y in D[:L]:
 
-            instance_str = work_word + " instance " + str(it) + "." + str(train_num)
+            # Skip empty data points
+            if len(x) < 1: continue
 
             # Predict
-            # NOTE: Passing in len(y) so we know what kind of
-            # y_hat to generate randomly at the start
             y_hat = rgs(x, phi, w, R, len(y))
             num_right_chars = len(y) - list_diff(y_hat, y)
 
             # If error, update weights
+            instance_str = work_word + " instance " + str(it) + "." + str(train_num)
             if y_hat != y:
                 instance_str = "\t[-]\t" + instance_str + "\t(" + str(num_right_chars) + "/" + str(len(y)) + ")"
                 if training:
-                    w = np.add(w, np.dot(eta, (np.subtract(phi(x, y),
-                                                           phi(x, y_hat)))))
-                    weights = w # HACK: This might be too much
-                num_mistakes += 1
+                    # TODO: Uncomment the weight update!
+                    w = np.add(w, np.dot(eta, (np.subtract(phi(x, y), phi(x, y_hat)))))
+                    # HACK: Setting "weights" each time might be too much
+                    weights = w 
+                    num_mistakes += 1
             else:
                 instance_str = "\t[+]\t" + instance_str + "\t(" + str(len(y)) + "/" + str(len(y)) + ")"
                 num_correct += 1
@@ -201,18 +214,26 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
         accuracy = num_correct / (num_correct + num_mistakes)
         acc_progress.append(accuracy)
 
-        # Plot accuracy timline
+        # Plot accuracy timeline
         if len(acc_progress) > 1:
             pw.plot(acc_progress, clear = True)
             pg.QtGui.QApplication.processEvents()
 
         # Report iteration stats
         print()
-        print("\t| Accuracy = " + str(accuracy) + "%")
+        print("\t| Accuracy = " + str(accuracy * 100) + "%")
         print("\t| Number correct = " + str(num_correct))
         print("\t| Number of mistakes = " + str(num_mistakes))
         print("\t| Time = ~" + str(round((time.clock() - it_start) / 60)) + " min")
         print()
+
+        # Check for convergence
+        if len(acc_progress) > 1:
+            if acc_progress[-1] == acc_progress[-2]:
+                print("Model has converged:")
+                print("\tAccuracy = " + str(accuracy * 100) + "%")
+                print("\tIteration = " + str(it))
+                break
 
     # Return and save weights!
     if training: return save_w(w)
@@ -288,7 +309,15 @@ def phi_pairwise(x, y, len_x = None, len_y = None):
     vect = np.zeros((dimen))
     alpha_list = list(alphabet)
     alpha_list.sort()
+    
+    # (One-time) Generate pair-index object
+    if len(pairs) == 0:
+        for a in alpha_list:
+            for b in alpha_list:
+                p = a + b
+                pairs.append(p)
 
+    # Unary features
     for i in range(len(x)):
 
         x_i = x[i]
@@ -299,13 +328,6 @@ def phi_pairwise(x, y, len_x = None, len_y = None):
         x_vect = np.array(x_i)
         y_target = len(x_i) * index
         for j in range(len(x_i)): vect[j + y_target] += x_vect[j]
-
-    # Generate pair-index object
-    if len(pairs) == 0:
-        for a in alpha_list:
-            for b in alpha_list:
-                p = a + b
-                pairs.append(p)
 
     # Pairwise features  
     for i in range(len(y) - 1):
@@ -318,6 +340,87 @@ def phi_pairwise(x, y, len_x = None, len_y = None):
         vect_index = pairwise_base_index + comb_index
 
         # Update occurace of pair
+        vect[vect_index] += 1
+
+    return vect
+
+def phi_third_order(x, y, len_x = None, len_y = None):
+    """
+    Third-order joint-feature function:
+        0. Do unary features
+        1. Do pairwise features
+        1. Capture all three-char permutations
+        2. Assign these permuations consistent indices
+        3. Count frequencies of each permuation and update vector
+           at that index
+    """
+
+    global pairwise_base_index, triplet_base_index, pairs, triplets
+
+    # NOTE: len_y = len(alphabet)
+    # Initial setting of phi dimensions
+    if len_x is None: dimen = phi_dimen
+    else:
+        pairwise_base_index = len_x * len_y
+        triplet_base_index = pairwise_base_index + (len_y ** 2) 
+        dimen = triplet_base_index + (len_y ** 3) 
+        
+    vect = np.zeros((dimen))
+    alpha_list = list(alphabet)
+    alpha_list.sort()
+    
+    # (One-time) Generate pair and triplet lists
+    if len(triplets) == 0:
+        for a in alpha_list:
+            for b in alpha_list:
+                # Grab pair
+                p = a + b
+                pairs.append(p)
+        
+                for c in alpha_list:
+                    # Grab triplet
+                    t = a + b + c
+                    triplets.append(t)
+
+    # Unary features
+    for i in range(len(x)):
+
+        x_i = x[i]
+        y_i = y[i]
+
+        # Unary features
+        index = alpha_list.index(y_i)
+        x_vect = np.array(x_i)
+        y_target = len(x_i) * index
+        for j in range(len(x_i)): vect[j + y_target] += x_vect[j]
+
+    # Pairwise features  
+    for i in range(len(y) - 1):
+        
+        # Get pair index
+        a = y[i]
+        b = y[i + 1]
+        p = a + b
+        comb_index = pairs.index(p)
+        vect_index = pairwise_base_index + comb_index
+
+        # Update occurace of pair
+        #print(p, "occurs at", vect_index)
+        vect[vect_index] += 1
+
+    # Third-order features  
+    for i in range(len(y) - 2):
+        
+        # Get pair index
+        a = y[i]
+        b = y[i + 1]
+        c = y[i + 2]
+        t = a + b + c
+        comb_index = triplets.index(t)
+        vect_index = triplet_base_index + comb_index
+
+        # Update occurace of pair
+        #print(t, "occurs at", vect_index)
         vect[vect_index] += 1
 
     return vect
@@ -433,14 +536,14 @@ def save_w(w):
     if (input("Proceed? (y/n): ").strip() == "n"): exit(0)
 
     # List weight files
-    files = [f for f in os.listdir(".")
+    files = [f for f in os.listdir(weights_dir)
          if os.path.isfile(f)
          and f.split(".")[-1] == "npy"]
     print("\tCurrent weight files (to avoid conflicts):", files)
 
     # Enter filename and save
     w_file_name = input("\tPlease enter filename: ")
-    np.save(w_file_name, w)
+    np.save(weights_dir + w_file_name, w)
     print("Saved!")
     print("-" * 35)
 
@@ -453,7 +556,7 @@ def load_w():
     print("Loading weights from local file:")
 
     # Show available weight files
-    files = [f for f in os.listdir(".")
+    files = [f for f in os.listdir(weights_dir)
              if os.path.isfile(f)
              and f.split(".")[-1] == "npy"]
     print("\tAvailable weight files:", files)
@@ -462,7 +565,7 @@ def load_w():
     w_file_name = ""
     while w_file_name not in files:
         w_file_name = input("\tPlease enter filename: ")
-    w = np.load(w_file_name)
+    w = np.load(weights_dir + w_file_name)
     print("File loaded!")
     print("-" * 35)
 
@@ -514,9 +617,6 @@ def parse_data_file(file_loc):
             x_i = [int(c) for c in x_i_str]
             y_i = setify(l_toks[2])
 
-            # TODO: Remove
-            if y_i not in ["i", "a", "m"]: continue
-
             # Collect length of all x_i's
             if len_x_vect < 0: len_x_vect = len(x_i)
 
@@ -524,6 +624,12 @@ def parse_data_file(file_loc):
             # NOTE: Listifying y_i is necessary to keep leading
             # zeroes, e.g. maintaining '04' rather than '4'
             alphabet.update([y_i])
+
+            # TODO: Remove this restricted alphabet
+            # NOTE: Just made it so we now have a complete
+            # alphabet to guess with, which makes prediction
+            # more fair and difficult
+            #if y_i not in ["a", "b"]: continue
 
             # Add single example to collection
             x.append(x_i)
