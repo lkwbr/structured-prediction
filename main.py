@@ -4,9 +4,19 @@
 # CptS 580, HW #1
 # Created 02/08/2017
 
+"""
+Structured Perceptron with Randomized Greedy Search to
+make inferences; running with varying joint-feature
+representations, such as: unary, pairwise, third-order,
+and fourth-order.
+
+NOTE: Currently, we have a problem with this program not
+converging, which is likely due to a small, language-
+dependent error.
+"""
+
 import pyqtgraph as pg
 import numpy as np
-#import winsound
 import random
 import signal
 import string
@@ -17,19 +27,18 @@ import sys
 import re
 import os
 
-# TODO:
-#   - Pairwise features!
-#   - Code Hamming loss
-#   - Let program run on both handwriting and text-to-speech
-#     data, gathering all the right information in the end.
-#   - Compare my program with legitamite other programs
+# Running on Windows?
+if os.name != "posix": 
+    windows = True
+    import winsound
+else: windows = False
 
 # Debugging 
 verbose = False         # Debug output control
 sig = False             # See if a signal is already being handled
 
 # Model
-alphabet = set()        # Set of label's alphabet
+alphabet = set()        # Set of given dataset's alphabet of labels
 
 # Phi-related
 len_x = -1
@@ -47,11 +56,11 @@ weights_dir = "weights/"
 
 def main():
     """
-    Main: driver function
+    Main: Driver function
 
-    Data: handwriting and text-to-speech
+    Data: Handwritten words and text-to-speech
 
-    Setup for both handwriting and text-to-speech mapping problems:
+    Setup (for both handwriting and text-to-speech mapping) problems:
         0. Establish model parameters
         1. Parse training and testing data
         2. Train structured perceptron on training data
@@ -83,7 +92,7 @@ def main():
                        data_dir + "ocr_fold0_sm_test.txt")]
     data_limit = len(raw_train_test)
 
-    for raw_train, raw_test in raw_train_test[:1]: #[:data_limit]:
+    for raw_train, raw_test in raw_train_test[:data_limit]:
 
         print()
         print("Parsing training and testing data:")
@@ -102,15 +111,10 @@ def main():
         phi = [phi_unary, phi_pairwise, phi_third_order, phi_fourth_order][3]
         phi_dimen = len(phi(train[0][0], train[0][1], len_x, len_y))
     
-        # TODO: Remove test
-        #ex = phi(train[0][0], train[0][1], len_x, len_y)
-        #print(ex)
-        #return
-
-        # Train structured perceptron!
         # NOTE: We can either train for weights, or load them
-        w = ospt(train, phi, R, eta, MAX, L)
-        #w = load_w()
+        load_w = False
+        if load_w: w = load_w()
+        else: w = ospt(train, phi, R, eta, MAX, L)
 
         # Test
         ospt(test, phi, R, 1, 1, L, w)
@@ -130,8 +134,8 @@ Methods immediately relevant to the concept of a perceptron
 def ospt(D, phi, R, eta, MAX, L, w = None):
     """
     Online structured perceptron training/testing:
-        - If weight vector w is not supplied, we're training;
-        - Else, we're testing
+        1. If weight vector w is not supplied, we're training;
+        2. Else, we're testing
     """
 
     # See if we're training or testing
@@ -172,6 +176,7 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
 
         print("[Iteration " + str(it) + "]\n")
 
+        # Essential iteration-related vars
         train_num = 0
         num_mistakes = 0
         num_correct = 0
@@ -187,20 +192,25 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
             num_right_chars = len(y) - list_diff(y_hat, y)
 
             # If error, update weights
-            instance_str = work_word + " instance " + str(it) + "." + str(train_num)
+            instance_str = (work_word + " instance " + str(it)
+                            + "." + str(train_num))
             if y_hat != y:
-                instance_str = "\t[-]\t" + instance_str + "\t(" + str(num_right_chars) + "/" + str(len(y)) + ")"
+                instance_str = ("\t[-]\t" + instance_str + "\t("
+                                + str(num_right_chars) + "/" + str(len(y)) + ")")
                 if training:
                     # TODO: Uncomment the weight update!
-                    w = np.add(w, np.dot(eta, (np.subtract(phi(x, y), phi(x, y_hat)))))
+                    w = np.add(w, np.dot(eta, (np.subtract(phi(x, y),
+                                                           phi(x, y_hat)))))
                     # HACK: Setting "weights" each time might be too much
                     weights = w 
                     num_mistakes += 1
             else:
-                instance_str = "\t[+]\t" + instance_str + "\t(" + str(len(y)) + "/" + str(len(y)) + ")"
+                instance_str = ("\t[+]\t" + instance_str + "\t(" + str(len(y))
+                                + "/" + str(len(y)) + ")")
                 num_correct += 1
 
-            instance_str += "\t[" + str(num_correct) + "/" + str(train_num + 1) + "]"
+            instance_str += ("\t[" + str(num_correct) + "/"
+                             + str(train_num + 1) + "]")
 
             # Measure iteration improvment (compared to last)
             if (it > 0):
@@ -209,6 +219,7 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
                     instance_str += "\t" + give_sign(int(improvement))
             it_improvement[train_num] = num_right_chars
 
+            # Print instance details and update training number
             print(instance_str)
             train_num += 1
 
@@ -226,7 +237,8 @@ def ospt(D, phi, R, eta, MAX, L, w = None):
         print("\t| Accuracy = " + str(accuracy * 100) + "%")
         print("\t| Number correct = " + str(num_correct))
         print("\t| Number of mistakes = " + str(num_mistakes))
-        print("\t| Time = ~" + str(round((time.clock() - it_start) / 60)) + " min")
+        print("\t| Time = ~" + str(round((time.clock() - it_start) / 60))
+              + " min")
         print()
 
         # Check for convergence
@@ -439,7 +451,8 @@ def phi_fourth_order(x, y, len_x = None, len_y = None):
            at that index
     """
 
-    global pairwise_base_index, triplet_base_index, quadruplet_base_index, pairs, triplets
+    global pairwise_base_index, triplet_base_index, quadruplet_base_index
+    global pairs, triplets
 
     # NOTE: len_y = len(alphabet)
     # Initial setting of phi dimensions
@@ -455,7 +468,7 @@ def phi_fourth_order(x, y, len_x = None, len_y = None):
     alpha_list.sort()
     
     # (One-time) Generate pair, triplet, and quadruplet lists
-    if len(triplets) == 0:
+    if len(quadruplets) == 0:
         for a in alpha_list:
             for b in alpha_list:
                 # Grab pair
@@ -632,11 +645,17 @@ def give_sign(n):
 def save_w(w):
     """ Serialize the weights of perceptron into local file """
 
+    # TODO: Encode filenames with the following:
+    #   0. Number of iterations (until stopped or converged)
+    #   1. Degree of phi
+    #   2. Type of data (e.g. nettalk or ocr)
+    #   3. Version (i.e. the number of weight files) 
+
     print("-" * 35)
     print("Saving weights to local file...")
 
     # Get user's attention
-    beep()
+    if windows: beep()
 
     # Ask if they want to save
     if (input("Proceed? (y/n): ").strip() == "n"): exit(0)
@@ -730,12 +749,6 @@ def parse_data_file(file_loc):
             # NOTE: Listifying y_i is necessary to keep leading
             # zeroes, e.g. maintaining '04' rather than '4'
             alphabet.update([y_i])
-
-            # TODO: Remove this restricted alphabet
-            # NOTE: Just made it so we now have a complete
-            # alphabet to guess with, which makes prediction
-            # more fair and difficult
-            #if y_i not in ["a", "b"]: continue
 
             # Add single example to collection
             x.append(x_i)
