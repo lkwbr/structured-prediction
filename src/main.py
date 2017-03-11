@@ -15,9 +15,7 @@ converging, which is likely due to a small, language-
 dependent error.
 """
 
-from model import *
-from util import *
-
+# Third-party libraries
 import pyqtgraph as pg
 import numpy as np
 import random
@@ -30,6 +28,10 @@ import sys
 import re
 import os
 
+# Custom classes and definitions
+from util import *
+from model import StructuredPerceptron
+
 # Running on Windows?
 if os.name != "posix":
     windows = True
@@ -39,19 +41,6 @@ else: windows = False
 # Debugging
 verbose = False         # Debug output control
 sig = False             # See if a signal is already being handled
-
-# Model
-alphabet = set()        # Set of given dataset's alphabet of labels
-
-# Phi-related
-len_x = -1
-phi_dimen = -1
-pairwise_base_index = -1
-triplet_base_index = -1
-quadruplet_base_index = -1
-pairs = []
-triplets = []
-quadruplets = []
 
 # Scoring function (weights)
 weights = []
@@ -73,8 +62,6 @@ def main():
         0. All data in form "000001010101010101..." "[label]"
     """
 
-    global len_x, phi_dimen
-
     # Save weights on Ctrl-C
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -82,48 +69,36 @@ def main():
     np.set_printoptions(threshold = np.inf)
 
     # Perceptron training params
+    # NOTE: Tune these accordingly
     R = [10, 25, 50, 100, 200][1]
     eta = 0.01
     MAX = 100
-    L = 100 #None
+    phi_order = 1   # e.g. 1 = unary, 2 = pairwise, 3 = third-order, etc.
 
     # Raw training and testing data
     data_dir = "data/"
-    raw_train_test = [(data_dir + "nettalk_stress_train.txt",
-                       data_dir + "nettalk_stress_test.txt"),
-                      (data_dir + "ocr_fold0_sm_train.txt",
-                       data_dir + "ocr_fold0_sm_test.txt")]
-    data_limit = 1 #len(raw_train_test)
+    raw_train_test = get_data_files(data_dir)
 
-    for raw_train, raw_test in raw_train_test[:data_limit]:
+    for raw_train, raw_test in raw_train_test[:]:
 
-        print()
         print("Parsing training and testing data:")
         print("\t" + raw_train)
         print("\t" + raw_test)
 
         # Parse train & test data
-        train, len_x, len_y = parse_data_file(raw_train)
+        train, len_x, alphabet = parse_data_file(raw_train)
         test, *_ = parse_data_file(raw_test)
 
-        print("Done parsing!")
-        print()
-
-        # From data -> joint feature function; detect and
-        # set phi_dimen dynamically
-        phi = [phi_unary, phi_pairwise, phi_third_order, phi_fourth_order][3]
-        phi_dimen = len(phi(train[0][0], train[0][1], len_x, len_y))
+        # Initialize model with parameters
+        sp = StructuredPerceptron(alphabet, len_x, phi_order, R, eta, MAX)
 
         # NOTE: We can either train for weights, or load them
         load_w = False
         if load_w: w = load_w()
-        else: w = ospt(train, phi, R, eta, MAX, L)
+        else: w = sp.train(train)
 
         # Test
-        ospt(test, phi, R, 1, 1, L, w)
-
-        # Clear proverbial canvas
-        reset_data_vars()
+        accuracy = sp.test(test)
 
     return
 

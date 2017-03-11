@@ -1,16 +1,13 @@
 # util.py
 
+import os
+
 """
 UTILITY FUNCTIONS
-
 Methods not directly relevant to the concept of the structured
 percpetron, but more to the maintainance and assistance of
 more basic computation in program
 """
-
-def reset_data_vars():
-    global alphabet
-    alphabet = set()
 
 def dprint(s):
     if verbose: print(s)
@@ -113,10 +110,48 @@ def signal_handler(signal, frame):
     sig = False
     exit(0)
 
+def set_list(l, i, v):
+    try:
+        l[i] = v
+    except IndexError:
+        for _ in range(i - len(l) + 1):
+            l.append(None)
+        l[i] = v
+
+def get_data_files(data_dir):
+    """
+    Recursively get all data files in given directory,
+    returning tuples of (train, test) pairs
+    """
+
+    data_files = []
+
+    for root, subdirs, files in os.walk(data_dir):
+
+        # Recurse on subdirectories
+        for subdir in subdirs:
+            data_files + get_data_files(subdir)
+
+        # Collect (train.txt. test.txt)
+        train_test_pair = []
+        for filename in files:
+            file_path = os.path.join(root, filename)
+
+            if filename.split(".")[0] == "train":
+                set_list(train_test_pair, 0, file_path)
+            if filename.split(".")[0] == "test":
+                set_list(train_test_pair, 1, file_path)
+
+        if len(train_test_pair) != 0:
+            data_files.append(tuple(train_test_pair))
+
+    return data_files
+
 def parse_data_file(file_loc):
     """ Parse raw data into form of [(x_0, y_0), ..., (x_n, y_n)] """
 
-    global alphabet
+    # Set of given dataset's alphabet of labels
+    alphabet = set()
 
     data_arr = []
     len_x_vect = -1
@@ -157,6 +192,4 @@ def parse_data_file(file_loc):
             x.append(x_i)
             y.append(y_i)
 
-    num_labels = len(alphabet)
-
-    return data_arr, len_x_vect, num_labels
+    return data_arr, len_x_vect, alphabet
