@@ -19,18 +19,19 @@ class StructuredPerceptron:
     # variable, and will change all instances of this class if they are changed;
     # however, object variables (declared in __init__) are unique to the object.
 
-    def __init__(self, alphabet, len_x, phi_order, R, eta, MAX):
+    def __init__(self, alphabet, len_x, phi_order, R, eta, MAX, b = None):
 
         self.alphabet = alphabet
         self.len_x = len_x
         self.len_y = len(alphabet)
 
         # Detect and set phi properties dynamically
+        self.phi_order = phi_order
         self.phi_funcs = [self.phi_unary, \
                  self.phi_pairwise, \
                  self.phi_third_order, \
                  self.phi_fourth_order]
-        phi = self.phi_funcs[phi_order - 1]
+        phi = self.phi_funcs[self.phi_order - 1]
 
         # Perceptron-related
         self.R = R                          # Number of restarts
@@ -47,6 +48,9 @@ class StructuredPerceptron:
         self.pairs = []
         self.triplets = []
         self.quadruplets = []
+
+        # (Optional) beam width
+        self.b = b
 
     def train(self, D):
         """ Train on input data set D """
@@ -160,6 +164,25 @@ class StructuredPerceptron:
         """
 
         return 0.0
+
+    def bstfbs(self, x, len_y):
+        """
+        Best-First Beam Search inference
+        """
+
+        # TODO: Modularize for both early update and max-violation
+        h = lambda y: self.get_score(x, y)
+        bs = BeamSearch(h, len_y, self.alphabet)
+        y_hat = bs.search()
+
+        return y_hat
+
+    def bdthfbs(self, x, len_y):
+        """
+        Breadth-First Beam Search inference
+        """
+
+        pass
 
     def rgs(self, x, len_y):
         """
@@ -519,6 +542,52 @@ class StructuredPerceptron:
         print("\tNumber of restarts = " + str(self.R))
         print("\tLearning rate = " + str(self.eta))
         print("\tMax iteration count = " + str(self.MAX))
-        print("\tNumber of joint-features = " + str(self.phi_dimen))
+        print("\tOrder of joint-features = " + str(self.phi_order))
         print("\tAlphabet length = " + str(self.len_y))
         print()
+
+class BeamSearch:
+
+    def __init__(self, h, term_len, alphabet):
+
+        # Heuristic guiding beam search; tells us desirability of inputted
+        # node given it's structured data (as a list)
+        self.h = h
+
+        # Length of terminal output
+        self.term_len = term_len
+
+        # Alphabet used for constructing nodes in the search space
+        self.alphabet = alphabet
+
+    def search():
+        """
+        Move through search space guided by given heuristic h, stopping
+        search once one node in beam is of given terminal length
+        """
+
+        beam = []
+        candidates = []
+        y_select = None
+
+        # Loop until complete structure output found in beam
+        while True:
+
+            # Maximum scoring output in beam
+            y_select = max(map(lambda y: self.h(y), beam))
+
+            # Expand upon maximum output
+            candidates = None
+            # TODO
+
+            # Prune excess, lower-scoring nodes
+            # TODO
+
+            # Check for terminal output
+            for out in beam: if len(out) == self.term_len: break
+
+        # Get highest scoring, complete output in beam (and return)
+        beam = [y for y in beam if len(y) == term_len]
+        y_hat = max(map(lambda y: self.h(y), beam))
+
+        return y_hat

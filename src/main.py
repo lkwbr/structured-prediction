@@ -3,6 +3,7 @@
 # Luke Weber, 11398889
 # CptS 580, HW #2
 # Created 02/08/2017
+# Last edited 03/11/2017
 
 """
 Structured Perceptron with Randomized Greedy Search to
@@ -70,6 +71,7 @@ def main():
     eta = 0.01
     MAX = 100
     phi_order = 1   # e.g. 1 = unary, 2 = pairwise, 3 = third-order, etc.
+    b = 5
 
     # Raw training and testing data
     data_dir = "data/"
@@ -86,7 +88,7 @@ def main():
         test, *_ = parse_data_file(raw_test)
 
         # Initialize model with parameters
-        sp = StructuredPerceptron(alphabet, len_x, phi_order, R, eta, MAX)
+        sp = StructuredPerceptron(alphabet, len_x, phi_order, R, eta, MAX, b)
 
         # NOTE: We can either train for weights, or load them
         load_w = False
