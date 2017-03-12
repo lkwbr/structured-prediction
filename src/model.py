@@ -173,6 +173,7 @@ class StructuredPerceptron:
         """
 
         # TODO: Modularize for both early update and max-violation
+
         h = lambda y: self.get_score(x, y)
         bs = BeamSearch(self.b, h, len_y, self.alphabet)
         y_hat = bs.search()
@@ -185,7 +186,6 @@ class StructuredPerceptron:
         """
 
         # TODO
-
         pass
 
     def rgs(self, x, len_y):
@@ -220,7 +220,9 @@ class StructuredPerceptron:
         dimen = self.len_x * self.len_y
         vect = np.zeros((dimen))
 
-        # NOTE: Changed from len(x) to len(y) to account for 
+        # NOTE: Changed from len(x) to len(y) to account for partial outputs
+        # of y; now we skill unlabelled x_i (character) vectors within the
+        # larger x (word) vector
         for i in range(len(y)):
 
             x_i = x[i]
@@ -250,6 +252,7 @@ class StructuredPerceptron:
                at that index
         """
 
+        # TODO: Eliminate globals and replace with object variables
         global pairwise_base_index, pairs
 
         # Initial setting of phi dimensions
@@ -436,7 +439,6 @@ class StructuredPerceptron:
             vect_index = pairwise_base_index + comb_index
 
             # Update occurace of pair
-            #print(p, "occurs at", vect_index)
             vect[vect_index] += 1
 
         # Third-order features
@@ -479,8 +481,6 @@ class StructuredPerceptron:
 
         # Joint-feature function of predicted label-group for input x
         pred_phi = self.phi(x, y_hat)
-
-        print("Pred_phi", pred_phi)
 
         # If weights are unset, dynamically init (based on phi length)
         if self.w is None: self.w = np.zeros((len(pred_phi)))
@@ -562,7 +562,7 @@ class BeamSearch:
         self.b = b
 
         # Heuristic guiding beam search; tells us desirability of inputted
-        # node given it's structured data (as a list)
+        # node (as real value) given it's structured data (as a list)
         self.h = h
 
         # Length of terminal output
@@ -588,14 +588,21 @@ class BeamSearch:
             y_select = self.max_in_beam(beam)
 
             # Expand upon maximum scoring (partial) output
+            # NOTE: We don't expand beyond terminal length
             candidates = beam + self.gen_children(y_select)
 
-            # Prune excess, lower-scoring nodes
-            beam = sorted(candidates, key = lambda y: self.h(y))[:b]
+            # Prune excess, lower-scoring nodes; reverse sorting, hence
+            # negating the value from our heuristic function; randomly
+            # shuffle candidates (before sorting) to give equally scoring
+            # nodes a fair chance
+            random.shuffle(candidates)
+            beam = sorted(candidates, key = lambda y: -self.h(y))[:self.b]
 
             # Check for terminal node/output
             for out in beam:
                 if len(out) == self.term_len: break
+            else: continue
+            break
 
         # Get highest scoring, complete output in beam (and return)
         beam = [y for y in beam if len(y) == self.term_len]
@@ -606,9 +613,20 @@ class BeamSearch:
     def max_in_beam(self, beam):
         """ Return maximum scoring node in beam w.r.t. heuristic h """
 
-        beam_node_scores = {(y, self.h(y)) for y in beam}
-        return max(beam_node_scores, key = (lambda y: beam_node_scores[y]), \
-                   default = [])
+        # Use dictionary of beam, mapping (encoded) y to it's score
+        beam_node_scores = {self.encode_y(y):self.h(y) for y in beam}
+        beam_max = max(beam_node_scores, key = \
+            (lambda y: beam_node_scores[y]), default = [])
+        return self.decode_y(beam_max)
+
+    def encode_y(self, y):
+        """ Encode y from list to string """
+        return "-".join(y)
+
+    def decode_y(self, y):
+        """ Decode y from string to list """
+        if y == []: return []
+        return y.split("-")
 
     def gen_children(self, y):
         """
@@ -616,8 +634,12 @@ class BeamSearch:
         children, each with 1-char difference from parent
         """
 
+        # Don't expand if we can't
+        if len(y) == self.term_len: return []
+
         children = []
         for char in self.alphabet:
             child = y + [char]
             children.append(child)
+
         return children
