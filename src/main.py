@@ -16,14 +16,10 @@ dependent error.
 """
 
 # Third-party libraries
-import pyqtgraph as pg
 import numpy as np
-import random
 import signal
 import string
 import math
-import time
-import copy
 import sys
 import re
 import os

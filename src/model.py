@@ -1,5 +1,13 @@
 # model.py
 
+import pyqtgraph as pg
+import numpy as np
+import random
+import time
+import copy
+
+from util import *
+
 """
 STRUCTURED PERCEPTRON
 Methods immediately relevant to the concept of a perceptron
@@ -23,18 +31,15 @@ class StructuredPerceptron:
                  self.phi_third_order, \
                  self.phi_fourth_order]
         phi = self.phi_funcs[phi_order - 1]
-        # TODO: Get phi_len with some equation
-        phi_len = len(phi(train[0][0], train[0][1], self.len_x, self.len_y))
 
         # Perceptron-related
         self.R = R                          # Number of restarts
         self.eta = eta                      # Learning rate
         self.MAX = MAX                      # Maximum number of iterations
-        self.w = np.zeros((self.phi_len))   # Learned weight vector
+        self.w = None                       # Learned weight vector
 
         # Phi-related
         self.phi = phi                      # Joint-feature function
-        self.phi_len = phi_len
         self.phi_dimen = -1
         self.pairwise_base_index = -1
         self.triplet_base_index = -1
@@ -47,7 +52,7 @@ class StructuredPerceptron:
         """ Train on input data set D """
 
         # Display heading
-        self.display_header()
+        self.display_header(D)
 
         # Record model's progress w.r.t. accuracy (and iteration improvment)
         it_improvement = np.zeros((len(D)))
@@ -55,7 +60,7 @@ class StructuredPerceptron:
         pw = pg.plot()
 
         # Reset weights of scoring function to 0
-        self.w.fill(0)
+        if self.w is not None: self.w.fill(0)
 
         # Iterate until max iterations or convergence
         for it in range(self.MAX):
@@ -78,19 +83,29 @@ class StructuredPerceptron:
                 if len(x) < 1: continue
 
                 # Predict
-                y_hat = rgs(x, self.phi, self.w, self.R, len(self.y))
+                y_hat = self.rgs(x, len(y))
                 num_right_chars = len(y) - list_diff(y_hat, y)
 
+                # TODO: Reformat
+                instance_str = ("Train instance " + str(it) \
+                    + "." + str(train_num))
+
                 # If error, update weights
-                instance_str = (work_word + " instance " + str(it)
-                                + "." + str(train_num))
                 if y_hat != y:
+
                     instance_str = ("\t[-]\t" + instance_str + "\t("
                                     + str(num_right_chars) + "/" + str(len(y)) + ")")
-                    if training:
-                        self.w = np.add(self.w, np.dot(self.eta, \
-                            (np.subtract(self.phi(x, y), self.phi(x, y_hat)))))
-                        num_mistakes += 1
+
+                    # Compute phi's
+                    ideal_phi = self.phi(x, y)
+                    pred_phi = self.phi(x, y_hat)
+
+                    # Perform weight update
+                    self.w = np.add(self.w, np.dot(self.eta, \
+                        (np.subtract(ideal_phi, pred_phi))))
+
+                    num_mistakes += 1
+
                 else:
                     instance_str = ("\t[+]\t" + instance_str + "\t(" + str(len(y))
                                     + "/" + str(len(y)) + ")")
@@ -137,43 +152,45 @@ class StructuredPerceptron:
                     break
 
         # Return and save weights!
-        #if training: return save_w(w)
         return
 
-    def test():
+    def test(self):
         """
         Train model with our outside-loaded or trained weights, return accuracy
         """
 
         return 0.0
 
-    def rgs(x, phi, w, R, len_y):
+    def rgs(self, x, len_y):
         """
         Randomized Greedy Search (RGS) inference:
         Try and use the current weights to arrive at the correct label;
         we will always return our best guess
         """
 
-        for i in range(R):
+        for i in range(self.R):
 
             # Initialize best scoring output randomly
-            y_hat = get_random_y(len_y)
+            y_hat = self.get_random_y(len_y)
 
             # Until convergence
             while True:
 
                 # Get max char
-                y_max = get_max_one_char(w, phi, x, y_hat)
+                y_max = self.get_max_one_char(x, y_hat)
                 if y_max == y_hat: break
                 y_hat = y_max
 
         return y_hat
 
-    def phi_unary(x, y, len_x = None, len_y = None):
-        """ Unary joint-feature function """
+    def phi_unary(self, x, y):
+        """
+        Unary joint-feature function: sums together feature vectors of
+        similar labels, and combines features for different labels in different
+        indices
+        """
 
-        if len_x is None: dimen = phi_dimen
-        else: dimen = len_x * len_y
+        dimen = self.len_x * self.len_y
         vect = np.zeros((dimen))
 
         for i in range(len(x)):
@@ -183,7 +200,7 @@ class StructuredPerceptron:
 
             # Sorting keeps consistency of indices with respect to
             # all prior and following phi(x, y) vectors
-            alpha_list = list(alphabet)
+            alpha_list = list(self.alphabet)
             alpha_list.sort()
             index = alpha_list.index(y_i)
             x_vect = np.array(x_i)
@@ -195,7 +212,7 @@ class StructuredPerceptron:
 
         return vect
 
-    def phi_pairwise(x, y, len_x = None, len_y = None):
+    def phi_pairwise(self, x, y):
         """
         Pairwise joint-feature function:
             0. Do unary features
@@ -207,15 +224,12 @@ class StructuredPerceptron:
 
         global pairwise_base_index, pairs
 
-        # NOTE: len_y = len(alphabet)
         # Initial setting of phi dimensions
-        if len_x is None: dimen = phi_dimen
-        else:
-            pairwise_base_index = len_x * len_y
-            dimen = (len_x * len_y) + (len_y ** 2)
+        pairwise_base_index = self.len_x * self.len_y
+        dimen = (self.len_x * self.len_y) + (self.len_y ** 2)
 
         vect = np.zeros((dimen))
-        alpha_list = list(alphabet)
+        alpha_list = list(self.alphabet)
         alpha_list.sort()
 
         # (One-time) Generate pair-index object
@@ -252,7 +266,7 @@ class StructuredPerceptron:
 
         return vect
 
-    def phi_third_order(x, y, len_x = None, len_y = None):
+    def phi_third_order(self, x, y):
         """
         Third-order joint-feature function:
             0. Do unary features
@@ -265,16 +279,13 @@ class StructuredPerceptron:
 
         global pairwise_base_index, triplet_base_index, pairs, triplets
 
-        # NOTE: len_y = len(alphabet)
         # Initial setting of phi dimensions
-        if len_x is None: dimen = phi_dimen
-        else:
-            pairwise_base_index = len_x * len_y
-            triplet_base_index = pairwise_base_index + (len_y ** 2)
-            dimen = triplet_base_index + (len_y ** 3)
+        pairwise_base_index = self.len_x * self.len_y
+        triplet_base_index = pairwise_base_index + (self.len_y ** 2)
+        dimen = triplet_base_index + (self.len_y ** 3)
 
         vect = np.zeros((dimen))
-        alpha_list = list(alphabet)
+        alpha_list = list(self.alphabet)
         alpha_list.sort()
 
         # (One-time) Generate pair and triplet lists
@@ -313,7 +324,6 @@ class StructuredPerceptron:
             vect_index = pairwise_base_index + comb_index
 
             # Update occurace of pair
-            #print(p, "occurs at", vect_index)
             vect[vect_index] += 1
 
         # Third-order features
@@ -327,13 +337,12 @@ class StructuredPerceptron:
             comb_index = triplets.index(t)
             vect_index = triplet_base_index + comb_index
 
-            # Update occurace of pair
-            #print(t, "occurs at", vect_index)
+            # Update occurace of triplet
             vect[vect_index] += 1
 
         return vect
 
-    def phi_fourth_order(x, y, len_x = None, len_y = None):
+    def phi_fourth_order(self, x, y):
         """
         Fourth-order joint-feature function:
             0. Do unary features
@@ -348,17 +357,14 @@ class StructuredPerceptron:
         global pairwise_base_index, triplet_base_index, quadruplet_base_index
         global pairs, triplets
 
-        # NOTE: len_y = len(alphabet)
         # Initial setting of phi dimensions
-        if len_x is None: dimen = phi_dimen
-        else:
-            pairwise_base_index = len_x * len_y
-            triplet_base_index = pairwise_base_index + (len_y ** 2)
-            quadruplet_base_index = triplet_base_index + (len_y ** 3)
-            dimen = quadruplet_base_index + (len_y ** 4)
+        pairwise_base_index = self.len_x * self.len_y
+        triplet_base_index = pairwise_base_index + (self.len_y ** 2)
+        quadruplet_base_index = triplet_base_index + (self.len_y ** 3)
+        dimen = quadruplet_base_index + (self.len_y ** 4)
 
         vect = np.zeros((dimen))
-        alpha_list = list(alphabet)
+        alpha_list = list(self.alphabet)
         alpha_list.sort()
 
         # (One-time) Generate pair, triplet, and quadruplet lists
@@ -416,8 +422,7 @@ class StructuredPerceptron:
             comb_index = triplets.index(t)
             vect_index = triplet_base_index + comb_index
 
-            # Update occurace of pair
-            #print(t, "occurs at", vect_index)
+            # Update occurace of triplet
             vect[vect_index] += 1
 
         # Fourth-order features
@@ -432,16 +437,27 @@ class StructuredPerceptron:
             comb_index = quadruplets.index(q)
             vect_index = quadruplet_base_index + comb_index
 
-            # Update occurace of pair
-            #print(q, "occurs at", vect_index)
+            # Update occurace of quadruplet
             vect[vect_index] += 1
 
         return vect
 
-    def get_score(w, phi, x, y_hat):
-        return np.dot(w, phi(x, y_hat))
+    def get_score(self, x, y_hat):
+        """
+        Compute score of joint-feature function with weights,
+        while also setting the weight dimensions to phi dimensions
+        dynamically
+        """
 
-    def get_random_y(len_y):
+        # Joint-feature function of predicted label-group for input x
+        pred_phi = self.phi(x, y_hat)
+
+        # If weights are unset, dynamically init (based on phi length)
+        if self.w is None: self.w = np.zeros((len(pred_phi)))
+
+        return np.dot(self.w, pred_phi)
+
+    def get_random_y(self, len_y):
         """ Return random array of alphabet characters of given length """
 
         rand_y = []
@@ -455,12 +471,12 @@ class StructuredPerceptron:
         else: rand_word_len = len_y
 
         for i in range(rand_word_len):
-            rand_char = random.sample(alphabet, 1)[0]
+            rand_char = random.sample(self.alphabet, 1)[0]
             rand_y.append(rand_char)
 
         return rand_y
 
-    def get_max_one_char(w, phi, x, y_hat):
+    def get_max_one_char(self, x, y_hat):
         """
         Make one-character changes to y_hat, finding which
         single change produces the best score; we return
@@ -468,7 +484,7 @@ class StructuredPerceptron:
         """
 
         # Initialize variables to max
-        s_max = get_score(w, phi, x, y_hat)
+        s_max = self.get_score(x, y_hat)
         y_max = y_hat
 
         for i in range(len(y_hat)):
@@ -477,11 +493,11 @@ class StructuredPerceptron:
             y_temp = copy.deepcopy(y_hat)
 
             # Go through a-z at i-th index
-            for c in alphabet:
+            for c in self.alphabet:
 
                 # Get score of 1-char change
                 y_temp[i] = c
-                s_new = get_score(w, phi, x, y_temp)
+                s_new = self.get_score(x, y_temp)
 
                 # Capture highest-scoring change
                 if s_new > s_max:
@@ -495,14 +511,14 @@ class StructuredPerceptron:
 
         self.w = w
 
-    def display_header():
+    def display_header(self, D):
         print()
         print("Structured Perceptron:")
         print()
-        print("\tData length (with limitation) = " + str(L))
-        print("\tNumber of restarts = " + str(R))
-        print("\tLearning rate = " + str(eta))
-        print("\tMax iteration count = " + str(MAX))
-        print("\tNumber of joint-features = " + str(phi_dimen))
-        print("\tAlphabet length = " + str(len(alphabet)))
+        print("\tData length (with limitation) = " + str(len(D)))
+        print("\tNumber of restarts = " + str(self.R))
+        print("\tLearning rate = " + str(self.eta))
+        print("\tMax iteration count = " + str(self.MAX))
+        print("\tNumber of joint-features = " + str(self.phi_dimen))
+        print("\tAlphabet length = " + str(self.len_y))
         print()
