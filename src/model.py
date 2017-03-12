@@ -10,7 +10,7 @@ from util import *
 
 """
 STRUCTURED PERCEPTRON
-Methods immediately relevant to the concept of a perceptron
+Methods immediately relevant to the concept of a generalized perceptron
 """
 
 class StructuredPerceptron:
@@ -86,8 +86,8 @@ class StructuredPerceptron:
                 # TODO: See if we can remove this
                 if len(x) < 1: continue
 
-                # Predict
-                y_hat = self.rgs(x, len(y))
+                # Predict, i.e. run inference
+                y_hat = self.bstfbs(x, len(y)) #self.rgs(x, len(y))
                 num_right_chars = len(y) - list_diff(y_hat, y)
 
                 # TODO: Reformat
@@ -163,6 +163,8 @@ class StructuredPerceptron:
         Train model with our outside-loaded or trained weights, return accuracy
         """
 
+        # TODO
+
         return 0.0
 
     def bstfbs(self, x, len_y):
@@ -172,7 +174,7 @@ class StructuredPerceptron:
 
         # TODO: Modularize for both early update and max-violation
         h = lambda y: self.get_score(x, y)
-        bs = BeamSearch(h, len_y, self.alphabet)
+        bs = BeamSearch(self.b, h, len_y, self.alphabet)
         y_hat = bs.search()
 
         return y_hat
@@ -181,6 +183,8 @@ class StructuredPerceptron:
         """
         Breadth-First Beam Search inference
         """
+
+        # TODO
 
         pass
 
@@ -216,7 +220,8 @@ class StructuredPerceptron:
         dimen = self.len_x * self.len_y
         vect = np.zeros((dimen))
 
-        for i in range(len(x)):
+        # NOTE: Changed from len(x) to len(y) to account for 
+        for i in range(len(y)):
 
             x_i = x[i]
             y_i = y[i]
@@ -475,6 +480,8 @@ class StructuredPerceptron:
         # Joint-feature function of predicted label-group for input x
         pred_phi = self.phi(x, y_hat)
 
+        print("Pred_phi", pred_phi)
+
         # If weights are unset, dynamically init (based on phi length)
         if self.w is None: self.w = np.zeros((len(pred_phi)))
 
@@ -548,7 +555,11 @@ class StructuredPerceptron:
 
 class BeamSearch:
 
-    def __init__(self, h, term_len, alphabet):
+    def __init__(self, b, h, term_len, alphabet):
+        """ Construct beam properties necessary for heuristic search """
+
+        # Beam width
+        self.b = b
 
         # Heuristic guiding beam search; tells us desirability of inputted
         # node given it's structured data (as a list)
@@ -560,7 +571,7 @@ class BeamSearch:
         # Alphabet used for constructing nodes in the search space
         self.alphabet = alphabet
 
-    def search():
+    def search(self):
         """
         Move through search space guided by given heuristic h, stopping
         search once one node in beam is of given terminal length
@@ -574,20 +585,39 @@ class BeamSearch:
         while True:
 
             # Maximum scoring output in beam
-            y_select = max(map(lambda y: self.h(y), beam))
+            y_select = self.max_in_beam(beam)
 
-            # Expand upon maximum output
-            candidates = None
-            # TODO
+            # Expand upon maximum scoring (partial) output
+            candidates = beam + self.gen_children(y_select)
 
             # Prune excess, lower-scoring nodes
-            # TODO
+            beam = sorted(candidates, key = lambda y: self.h(y))[:b]
 
-            # Check for terminal output
-            for out in beam: if len(out) == self.term_len: break
+            # Check for terminal node/output
+            for out in beam:
+                if len(out) == self.term_len: break
 
         # Get highest scoring, complete output in beam (and return)
-        beam = [y for y in beam if len(y) == term_len]
-        y_hat = max(map(lambda y: self.h(y), beam))
+        beam = [y for y in beam if len(y) == self.term_len]
+        y_hat = self.max_in_beam(beam)
 
         return y_hat
+
+    def max_in_beam(self, beam):
+        """ Return maximum scoring node in beam w.r.t. heuristic h """
+
+        beam_node_scores = {(y, self.h(y)) for y in beam}
+        return max(beam_node_scores, key = (lambda y: beam_node_scores[y]), \
+                   default = [])
+
+    def gen_children(self, y):
+        """
+        Using alphabet and given (partial) labelling y, generate list of
+        children, each with 1-char difference from parent
+        """
+
+        children = []
+        for char in self.alphabet:
+            child = y + [char]
+            children.append(child)
+        return children
