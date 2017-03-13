@@ -89,8 +89,11 @@ class StructuredPerceptron:
                 # Perform standard weight update
                 # NOTE: Modularized to allow for standard update, early update,
                 # and max-violation update
-                *_ = self.standard_update(x, y)
+                correct, mistake, num_right_chars, instance_str = \
+                    self.standard_update(x, y, (str(it) + "." + str(train_num)))
 
+                num_correct += correct
+                num_mistakes += mistake
                 instance_str += ("\t[" + str(num_correct) + "/"
                                  + str(train_num + 1) + "]")
 
@@ -143,26 +146,37 @@ class StructuredPerceptron:
 
         return 0.0
 
-    def standard_update(self, x, y):
+    def standard_update(self, x, y, train_instance):
         """
         [ Standard update doesn't converge because it doesn't guarentee violation ]
+        Search error:   Maximum scoring terminal output is wrong
+        Weight update:  Standard structured perceptron on highest scoring terminal
+        Beam update:    None
         """
 
-        # Predict, i.e. run inference
-        y_hat = self.bstfbs(x, len(y)) #self.rgs(x, len(y))
+        # Predict (i.e. run inference)
+        y_hat = self.bstfbs(x, len(y))
         num_right_chars = len(y) - list_diff(y_hat, y)
+        mistake = 0
+        correct = 0
 
-        # TODO: Reformat
-        instance_str = ("Train instance " + str(it) \
-            + "." + str(train_num))
+        instance_str = ("Train instance " + train_instance)
+        result_char = ""
+
+        # Show real output and predicted output!
+        # NOTE: That weird-looking list comprehension below just indicates
+        # which characters y_hat got wrong w.r.t. y
+        print("\t\t\t" + " " + "".join(\
+              ["_" if y_hat[i] != y[i] else " " for i in range(len(y))]) \
+              + " ")
+        print("\t\t\t" + "'" + "".join(y_hat).upper() + "'")
+        print("\t\t\t" + "'" + "".join(y).upper() + "'" + "*")
+        print("\n")
 
         # If error, update weights
         if y_hat != y:
 
-            instance_str = ("\t[-]\t" + instance_str + "\t("
-                            + str(num_right_chars) + "/" + str(len(y)) + ")")
-
-            # Compute phi's
+            # Compute joint-features of correct and predicted outputs
             ideal_phi = self.phi(x, y)
             pred_phi = self.phi(x, y_hat)
 
@@ -170,12 +184,17 @@ class StructuredPerceptron:
             self.w = np.add(self.w, np.dot(self.eta, \
                 (np.subtract(ideal_phi, pred_phi))))
 
-            num_mistakes += 1
+            result_char = "-"
+            mistake = 1
 
         else:
-            instance_str = ("\t[+]\t" + instance_str + "\t(" + str(len(y))
-                            + "/" + str(len(y)) + ")")
-            num_correct += 1
+            result_char = "+"
+            correct = 1
+
+        instance_str = ("\t[" + result_char + "]\t" + instance_str + "\t(" + \
+                        str(num_right_chars) + "/" + str(len(y)) + ")")
+
+        return correct, mistake, num_right_chars, instance_str
 
     def early_update(self, x, y):
         """
@@ -185,8 +204,9 @@ class StructuredPerceptron:
         Beam update:    Reset beam with intial state (or discontinue search)
         """
 
+        #TODO
 
-        pass #TODO
+        pass
 
     def max_violation_update(self, x, y):
         """
@@ -196,7 +216,9 @@ class StructuredPerceptron:
         Beam update:    Reset beam with intial state (or discontinue search)
         """
 
-        pass #TODO
+        #TODO
+
+        pass
 
     def bstfbs(self, x, len_y):
         """
@@ -336,8 +358,8 @@ class StructuredPerceptron:
 
         # Initial setting of phi dimensions
         self.pairwise_base_index = self.len_x * self.len_y
-        self.triplet_base_index = pairwise_base_index + (self.len_y ** 2)
-        dimen = triplet_base_index + (self.len_y ** 3)
+        self.triplet_base_index = self.pairwise_base_index + (self.len_y ** 2)
+        dimen = self.triplet_base_index + (self.len_y ** 3)
 
         vect = np.zeros((dimen))
         alpha_list = list(self.alphabet)
@@ -357,7 +379,7 @@ class StructuredPerceptron:
                         self.triplets.append(t)
 
         # Unary features
-        for i in range(len(x)):
+        for i in range(len(y)):
 
             x_i = x[i]
             y_i = y[i]
