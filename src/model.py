@@ -90,7 +90,7 @@ class StructuredPerceptron:
                 # NOTE: Modularized to allow for standard update, early update,
                 # and max-violation update
                 correct, mistake, num_right_chars, instance_str, err_display = \
-                    self.standard_update(x, y, (str(it) + "." + str(train_num)))
+                    self.early_update(x, y, (str(it) + "." + str(train_num)))
 
                 num_correct += correct
                 num_mistakes += mistake
@@ -150,7 +150,7 @@ class StructuredPerceptron:
     def standard_update(self, x, y, train_instance):
         """
         [ Standard update doesn't converge because it doesn't guarentee violation ]
-        Search error:   Maximum scoring terminal output is wrong
+        Search error:   Maximum scoring terminal output at end of search is wrong
         Weight update:  Standard structured perceptron on highest scoring terminal
         Beam update:    None
         """
@@ -198,7 +198,7 @@ class StructuredPerceptron:
 
         return correct, mistake, num_right_chars, instance_str, err_display
 
-    def early_update(self, x, y):
+    def early_update(self, x, y, train_instance):
         """
         [ When correct label falls off the beam (via pruning), update right then ]
         Search error:   No target nodes in beam
@@ -206,9 +206,62 @@ class StructuredPerceptron:
         Beam update:    Reset beam with intial state (or discontinue search)
         """
 
-        #TODO
+        # TODO: Adapt to early update
 
-        pass
+        # Initialize beam search tree
+        h = lambda y: self.get_score(x, y)
+        bs = BeamSearch(self.b, h, y, self.alphabet)
+
+        # Beam search until target node gets pruned
+        while bs.expand():
+
+            # Error: target node has been pruned
+            if not bs.contains_target():
+
+                # NOTE: Assuming we use last y-select as node we use for
+                # weight update
+                y_hat = bs.y_select
+
+                # Perform weight update
+                ideal_phi = self.phi(x, y)
+                pred_phi = self.phi(x, y_hat)
+                self.w = np.add(self.w, np.dot(self.eta, \
+                    (np.subtract(ideal_phi, pred_phi))))
+
+                # Reset beam search
+                bs.reset()
+
+        # Predict (i.e. run inference)
+        y_hat = bs.complete_max_in_beam()
+        num_right_chars = len(y) - list_diff(y_hat, y)
+        mistake = 0
+        correct = 0
+
+        # ----------------
+
+        instance_str = ("Train instance " + train_instance)
+        result_char = ""
+
+        # Show real output and predicted output!
+        err_display = "\n"
+        err_display += ("\t\t\t" + " " + "".join(\
+              ["_" if y_hat[i] != y[i] else " " for i in range(len(y))]) \
+              + " \n")
+        err_display += ("\t\t\t" + "'" + "".join(y_hat).upper() + "'\n")
+        err_display += ("\t\t\t" + "'" + "".join(y).upper() + "'" + "*\n")
+        err_display += ("\n")
+
+        if y_hat != y:
+            result_char = "-"
+            mistake = 1
+        else:
+            result_char = "+"
+            correct = 1
+
+        instance_str = ("\t[" + result_char + "]\t" + instance_str + "\t(" + \
+                        str(num_right_chars) + "/" + str(len(y)) + ")")
+
+        return correct, mistake, num_right_chars, instance_str, err_display
 
     def max_violation_update(self, x, y):
         """
@@ -227,8 +280,10 @@ class StructuredPerceptron:
         Best-First Beam Search inference
         """
 
+        # TODO: Expand this to allow for us to explicitly expand the beam
+
         h = lambda y: self.get_score(x, y)
-        bs = BeamSearch(self.b, h, len_y, self.alphabet)
+        bs = BeamSearch(self.b, h, y, self.alphabet)
         y_hat = bs.search()
 
         return y_hat
@@ -601,7 +656,7 @@ class StructuredPerceptron:
 class BeamSearch:
     """ """
 
-    def __init__(self, b, h, term_len, alphabet):
+    def __init__(self, b, h, y, alphabet):
         """ Construct beam properties necessary for heuristic search """
 
         # Beam as a list
@@ -615,7 +670,13 @@ class BeamSearch:
         self.h = h
 
         # Length of terminal output
-        self.term_len = term_len
+        self.term_len = len(y)
+
+        # Store correct output (to know target nodes)
+        self.y = y
+
+        # Stores selected y-node which created most recent expansion
+        self.y_select = []
 
         # Alphabet used for constructing nodes in the search space
         self.alphabet = alphabet
@@ -627,12 +688,12 @@ class BeamSearch:
         """
 
         # [Grab] maximum scoring output in beam
-        y_select = self.max_in_beam()
+        self.y_select = self.max_in_beam()
 
         # [Expand] upon maximum scoring (partial) output
         # NOTE: We don't expand beyond terminal length
-        candidates = self.beam + self.gen_children(y_select)
-        if len(y_select) > 0: candidates.remove(y_select)
+        candidates = self.beam + self.gen_children(self.y_select)
+        if len(self.y_select) > 0: candidates.remove(self.y_select)
 
         # [Prune] excess, lower-scoring nodes; reverse sorting, hence
         # negating the value from our heuristic function; randomly
@@ -656,9 +717,19 @@ class BeamSearch:
         while self.expand(): pass
 
         # Get highest scoring, complete output in beam (and return)
+        y_hat = self.complete_max_in_beam()
+
+        return y_hat
+
+    def reset(self):
+        """ Reset beam back to initial state (i.e. empty beam) """
+        self.beam = []
+
+    def complete_max_in_beam(self):
+        """ Get max scoring, complete output in beam """
+
         self.beam = [y for y in self.beam if len(y) == self.term_len]
         y_hat = self.max_in_beam()
-
         return y_hat
 
     def max_in_beam(self):
@@ -669,6 +740,16 @@ class BeamSearch:
         beam_max = max(beam_node_scores, key = \
             (lambda y: beam_node_scores[y]), default = [])
         return self.decode_y(beam_max)
+
+    def contains_target(self):
+        """ Boolean returned indicating if beam contains a target node """
+
+        # Check if any node in beam is a subset of correct y
+        y_str = self.encode_y(self.y)
+        for y_node in self.beam:
+            y_node_str = self.encode_y(y_node)
+            if y_str.find(y_node_str) == 0: return True
+        return False
 
     def encode_y(self, y):
         """ Encode y from list to string """
