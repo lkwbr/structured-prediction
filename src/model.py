@@ -89,7 +89,7 @@ class StructuredPerceptron:
                 # Perform standard weight update
                 # NOTE: Modularized to allow for standard update, early update,
                 # and max-violation update
-                correct, mistake, num_right_chars, instance_str = \
+                correct, mistake, num_right_chars, instance_str, err_display = \
                     self.standard_update(x, y, (str(it) + "." + str(train_num)))
 
                 num_correct += correct
@@ -103,6 +103,7 @@ class StructuredPerceptron:
                     if improvement != 0:
                         instance_str += "\t" + give_sign(int(improvement))
                 it_improvement[train_num] = num_right_chars
+                instance_str += err_display
 
                 # Print instance details and update training number
                 print(instance_str)
@@ -166,12 +167,13 @@ class StructuredPerceptron:
         # Show real output and predicted output!
         # NOTE: That weird-looking list comprehension below just indicates
         # which characters y_hat got wrong w.r.t. y
-        print("\t\t\t" + " " + "".join(\
+        err_display = "\n"
+        err_display += ("\t\t\t" + " " + "".join(\
               ["_" if y_hat[i] != y[i] else " " for i in range(len(y))]) \
-              + " ")
-        print("\t\t\t" + "'" + "".join(y_hat).upper() + "'")
-        print("\t\t\t" + "'" + "".join(y).upper() + "'" + "*")
-        print("\n")
+              + " \n")
+        err_display += ("\t\t\t" + "'" + "".join(y_hat).upper() + "'\n")
+        err_display += ("\t\t\t" + "'" + "".join(y).upper() + "'" + "*\n")
+        err_display += ("\n")
 
         # If error, update weights
         if y_hat != y:
@@ -194,7 +196,7 @@ class StructuredPerceptron:
         instance_str = ("\t[" + result_char + "]\t" + instance_str + "\t(" + \
                         str(num_right_chars) + "/" + str(len(y)) + ")")
 
-        return correct, mistake, num_right_chars, instance_str
+        return correct, mistake, num_right_chars, instance_str, err_display
 
     def early_update(self, x, y):
         """
@@ -435,7 +437,7 @@ class StructuredPerceptron:
         self.pairwise_base_index = self.len_x * self.len_y
         self.triplet_base_index = self.pairwise_base_index + (self.len_y ** 2)
         self.quadruplet_base_index = self.triplet_base_index + (self.len_y ** 3)
-        dimen = quadruplet_base_index + (self.len_y ** 4)
+        dimen = self.quadruplet_base_index + (self.len_y ** 4)
 
         vect = np.zeros((dimen))
         alpha_list = list(self.alphabet)
@@ -597,9 +599,13 @@ class StructuredPerceptron:
         print()
 
 class BeamSearch:
+    """ """
 
     def __init__(self, b, h, term_len, alphabet):
         """ Construct beam properties necessary for heuristic search """
+
+        # Beam as a list
+        self.beam = []
 
         # Beam width
         self.b = b
@@ -614,51 +620,52 @@ class BeamSearch:
         # Alphabet used for constructing nodes in the search space
         self.alphabet = alphabet
 
+    def expand(self):
+        """
+        Perform single expansion from beam; return false if terminal node is hit,
+        otherwise return true
+        """
+
+        # [Grab] maximum scoring output in beam
+        y_select = self.max_in_beam()
+
+        # [Expand] upon maximum scoring (partial) output
+        # NOTE: We don't expand beyond terminal length
+        candidates = self.beam + self.gen_children(y_select)
+        if len(y_select) > 0: candidates.remove(y_select)
+
+        # [Prune] excess, lower-scoring nodes; reverse sorting, hence
+        # negating the value from our heuristic function; randomly
+        # shuffle candidates (before sorting) to give equally scoring
+        # nodes a fair chance
+        random.shuffle(candidates)
+        self.beam = sorted(candidates, key = lambda y: -self.h(y))[:self.b]
+
+        # [Check] for terminal node/output
+        for out in self.beam:
+            if len(out) == self.term_len: return False
+        return True
+
     def search(self):
         """
         Move through search space guided by given heuristic h, stopping
         search once one node in beam is of given terminal length
         """
 
-        beam = []
-        candidates = []
-        y_select = None
-
         # Loop until complete structure output found in beam
-        while True:
-
-            # Maximum scoring output in beam
-            y_select = self.max_in_beam(beam)
-
-            # Expand upon maximum scoring (partial) output
-            # NOTE: We don't expand beyond terminal length
-            candidates = beam + self.gen_children(y_select)
-            if len(y_select) > 0: candidates.remove(y_select)
-
-            # Prune excess, lower-scoring nodes; reverse sorting, hence
-            # negating the value from our heuristic function; randomly
-            # shuffle candidates (before sorting) to give equally scoring
-            # nodes a fair chance
-            random.shuffle(candidates)
-            beam = sorted(candidates, key = lambda y: -self.h(y))[:self.b]
-
-            # Check for terminal node/output
-            for out in beam:
-                if len(out) == self.term_len: break
-            else: continue
-            break
+        while self.expand(): pass
 
         # Get highest scoring, complete output in beam (and return)
-        beam = [y for y in beam if len(y) == self.term_len]
-        y_hat = self.max_in_beam(beam)
+        self.beam = [y for y in self.beam if len(y) == self.term_len]
+        y_hat = self.max_in_beam()
 
         return y_hat
 
-    def max_in_beam(self, beam):
+    def max_in_beam(self):
         """ Return maximum scoring node in beam w.r.t. heuristic h """
 
         # Use dictionary of beam, mapping (encoded) y to it's score
-        beam_node_scores = {self.encode_y(y):self.h(y) for y in beam}
+        beam_node_scores = {self.encode_y(y):self.h(y) for y in self.beam}
         beam_max = max(beam_node_scores, key = \
             (lambda y: beam_node_scores[y]), default = [])
         return self.decode_y(beam_max)
