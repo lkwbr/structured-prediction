@@ -70,14 +70,14 @@ def main():
     R = [10, 25, 50, 100, 200][1]
     eta = 0.01
     MAX = 100
-    phi_order = 1   # e.g. 1 = unary, 2 = pairwise, 3 = third-order, etc.
+    phi_order = 2   # e.g. 1 = unary, 2 = pairwise, 3 = third-order, etc.
     b = 5
 
     # Raw training and testing data
     data_dir = "data/"
     raw_train_test = get_data_files(data_dir)
 
-    for raw_train, raw_test in raw_train_test[:]:
+    for raw_train, raw_test in raw_train_test[1:]:
 
         print("Parsing training and testing data:")
         print("\t" + raw_train)

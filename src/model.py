@@ -86,34 +86,10 @@ class StructuredPerceptron:
                 # TODO: See if we can remove this
                 if len(x) < 1: continue
 
-                # Predict, i.e. run inference
-                y_hat = self.bstfbs(x, len(y)) #self.rgs(x, len(y))
-                num_right_chars = len(y) - list_diff(y_hat, y)
-
-                # TODO: Reformat
-                instance_str = ("Train instance " + str(it) \
-                    + "." + str(train_num))
-
-                # If error, update weights
-                if y_hat != y:
-
-                    instance_str = ("\t[-]\t" + instance_str + "\t("
-                                    + str(num_right_chars) + "/" + str(len(y)) + ")")
-
-                    # Compute phi's
-                    ideal_phi = self.phi(x, y)
-                    pred_phi = self.phi(x, y_hat)
-
-                    # Perform weight update
-                    self.w = np.add(self.w, np.dot(self.eta, \
-                        (np.subtract(ideal_phi, pred_phi))))
-
-                    num_mistakes += 1
-
-                else:
-                    instance_str = ("\t[+]\t" + instance_str + "\t(" + str(len(y))
-                                    + "/" + str(len(y)) + ")")
-                    num_correct += 1
+                # Perform standard weight update
+                # NOTE: Modularized to allow for standard update, early update,
+                # and max-violation update
+                *_ = self.standard_update(x, y)
 
                 instance_str += ("\t[" + str(num_correct) + "/"
                                  + str(train_num + 1) + "]")
@@ -167,12 +143,65 @@ class StructuredPerceptron:
 
         return 0.0
 
+    def standard_update(self, x, y):
+        """
+        [ Standard update doesn't converge because it doesn't guarentee violation ]
+        """
+
+        # Predict, i.e. run inference
+        y_hat = self.bstfbs(x, len(y)) #self.rgs(x, len(y))
+        num_right_chars = len(y) - list_diff(y_hat, y)
+
+        # TODO: Reformat
+        instance_str = ("Train instance " + str(it) \
+            + "." + str(train_num))
+
+        # If error, update weights
+        if y_hat != y:
+
+            instance_str = ("\t[-]\t" + instance_str + "\t("
+                            + str(num_right_chars) + "/" + str(len(y)) + ")")
+
+            # Compute phi's
+            ideal_phi = self.phi(x, y)
+            pred_phi = self.phi(x, y_hat)
+
+            # Perform weight update
+            self.w = np.add(self.w, np.dot(self.eta, \
+                (np.subtract(ideal_phi, pred_phi))))
+
+            num_mistakes += 1
+
+        else:
+            instance_str = ("\t[+]\t" + instance_str + "\t(" + str(len(y))
+                            + "/" + str(len(y)) + ")")
+            num_correct += 1
+
+    def early_update(self, x, y):
+        """
+        [ When correct label falls off the beam (via pruning), update right then ]
+        Search error:   No target nodes in beam
+        Weight update:  Standard structured perceptron
+        Beam update:    Reset beam with intial state (or discontinue search)
+        """
+
+
+        pass #TODO
+
+    def max_violation_update(self, x, y):
+        """
+        [ Use maximum violating prefix in search space to do weight update ]
+        Search error:   No target nodes in beam
+        Weight update:  Standard structured perceptron
+        Beam update:    Reset beam with intial state (or discontinue search)
+        """
+
+        pass #TODO
+
     def bstfbs(self, x, len_y):
         """
         Best-First Beam Search inference
         """
-
-        # TODO: Modularize for both early update and max-violation
 
         h = lambda y: self.get_score(x, y)
         bs = BeamSearch(self.b, h, len_y, self.alphabet)
@@ -252,11 +281,8 @@ class StructuredPerceptron:
                at that index
         """
 
-        # TODO: Eliminate globals and replace with object variables
-        global pairwise_base_index, pairs
-
         # Initial setting of phi dimensions
-        pairwise_base_index = self.len_x * self.len_y
+        self.pairwise_base_index = self.len_x * self.len_y
         dimen = (self.len_x * self.len_y) + (self.len_y ** 2)
 
         vect = np.zeros((dimen))
@@ -264,14 +290,14 @@ class StructuredPerceptron:
         alpha_list.sort()
 
         # (One-time) Generate pair-index object
-        if len(pairs) == 0:
+        if len(self.pairs) == 0:
             for a in alpha_list:
                 for b in alpha_list:
                     p = a + b
-                    pairs.append(p)
+                    self.pairs.append(p)
 
         # Unary features
-        for i in range(len(x)):
+        for i in range(len(y)):
 
             x_i = x[i]
             y_i = y[i]
@@ -289,8 +315,8 @@ class StructuredPerceptron:
             a = y[i]
             b = y[i + 1]
             p = a + b
-            comb_index = pairs.index(p)
-            vect_index = pairwise_base_index + comb_index
+            comb_index = self.pairs.index(p)
+            vect_index = self.pairwise_base_index + comb_index
 
             # Update occurace of pair
             vect[vect_index] += 1
@@ -308,11 +334,9 @@ class StructuredPerceptron:
                at that index
         """
 
-        global pairwise_base_index, triplet_base_index, pairs, triplets
-
         # Initial setting of phi dimensions
-        pairwise_base_index = self.len_x * self.len_y
-        triplet_base_index = pairwise_base_index + (self.len_y ** 2)
+        self.pairwise_base_index = self.len_x * self.len_y
+        self.triplet_base_index = pairwise_base_index + (self.len_y ** 2)
         dimen = triplet_base_index + (self.len_y ** 3)
 
         vect = np.zeros((dimen))
@@ -320,17 +344,17 @@ class StructuredPerceptron:
         alpha_list.sort()
 
         # (One-time) Generate pair and triplet lists
-        if len(triplets) == 0:
+        if len(self.triplets) == 0:
             for a in alpha_list:
                 for b in alpha_list:
                     # Grab pair
                     p = a + b
-                    pairs.append(p)
+                    self.pairs.append(p)
 
                     for c in alpha_list:
                         # Grab triplet
                         t = a + b + c
-                        triplets.append(t)
+                        self.triplets.append(t)
 
         # Unary features
         for i in range(len(x)):
@@ -351,8 +375,8 @@ class StructuredPerceptron:
             a = y[i]
             b = y[i + 1]
             p = a + b
-            comb_index = pairs.index(p)
-            vect_index = pairwise_base_index + comb_index
+            comb_index = self.pairs.index(p)
+            vect_index = self.pairwise_base_index + comb_index
 
             # Update occurace of pair
             vect[vect_index] += 1
@@ -365,8 +389,8 @@ class StructuredPerceptron:
             b = y[i + 1]
             c = y[i + 2]
             t = a + b + c
-            comb_index = triplets.index(t)
-            vect_index = triplet_base_index + comb_index
+            comb_index = self.triplets.index(t)
+            vect_index = self.triplet_base_index + comb_index
 
             # Update occurace of triplet
             vect[vect_index] += 1
@@ -385,13 +409,10 @@ class StructuredPerceptron:
                at that index
         """
 
-        global pairwise_base_index, triplet_base_index, quadruplet_base_index
-        global pairs, triplets
-
         # Initial setting of phi dimensions
-        pairwise_base_index = self.len_x * self.len_y
-        triplet_base_index = pairwise_base_index + (self.len_y ** 2)
-        quadruplet_base_index = triplet_base_index + (self.len_y ** 3)
+        self.pairwise_base_index = self.len_x * self.len_y
+        self.triplet_base_index = self.pairwise_base_index + (self.len_y ** 2)
+        self.quadruplet_base_index = self.triplet_base_index + (self.len_y ** 3)
         dimen = quadruplet_base_index + (self.len_y ** 4)
 
         vect = np.zeros((dimen))
@@ -399,25 +420,25 @@ class StructuredPerceptron:
         alpha_list.sort()
 
         # (One-time) Generate pair, triplet, and quadruplet lists
-        if len(quadruplets) == 0:
+        if len(self.quadruplets) == 0:
             for a in alpha_list:
                 for b in alpha_list:
                     # Grab pair
                     p = a + b
-                    pairs.append(p)
+                    self.pairs.append(p)
 
                     for c in alpha_list:
                         # Grab triplet
                         t = a + b + c
-                        triplets.append(t)
+                        self.triplets.append(t)
 
                         for d in alpha_list:
                             # Grab quadruplet
                             q = a + b + c + d
-                            quadruplets.append(q)
+                            self.quadruplets.append(q)
 
         # Unary features
-        for i in range(len(x)):
+        for i in range(len(y)):
 
             x_i = x[i]
             y_i = y[i]
@@ -435,8 +456,8 @@ class StructuredPerceptron:
             a = y[i]
             b = y[i + 1]
             p = a + b
-            comb_index = pairs.index(p)
-            vect_index = pairwise_base_index + comb_index
+            comb_index = self.pairs.index(p)
+            vect_index = self.pairwise_base_index + comb_index
 
             # Update occurace of pair
             vect[vect_index] += 1
@@ -449,8 +470,8 @@ class StructuredPerceptron:
             b = y[i + 1]
             c = y[i + 2]
             t = a + b + c
-            comb_index = triplets.index(t)
-            vect_index = triplet_base_index + comb_index
+            comb_index = self.triplets.index(t)
+            vect_index = self.triplet_base_index + comb_index
 
             # Update occurace of triplet
             vect[vect_index] += 1
@@ -464,8 +485,8 @@ class StructuredPerceptron:
             c = y[i + 2]
             d = y[i + 3]
             q = a + b + c + d
-            comb_index = quadruplets.index(q)
-            vect_index = quadruplet_base_index + comb_index
+            comb_index = self.quadruplets.index(q)
+            vect_index = self.quadruplet_base_index + comb_index
 
             # Update occurace of quadruplet
             vect[vect_index] += 1
@@ -590,6 +611,7 @@ class BeamSearch:
             # Expand upon maximum scoring (partial) output
             # NOTE: We don't expand beyond terminal length
             candidates = beam + self.gen_children(y_select)
+            if len(y_select) > 0: candidates.remove(y_select)
 
             # Prune excess, lower-scoring nodes; reverse sorting, hence
             # negating the value from our heuristic function; randomly
