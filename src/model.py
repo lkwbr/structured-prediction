@@ -138,13 +138,41 @@ class StructuredPerceptron:
         # Return and save weights!
         return
 
-    def test(self):
+    def test(self, D):
         """
-        Train model with our outside-loaded or trained weights, return accuracy
+        Test model with our model's weights, return accuracy
         """
 
-        # TODO
+        train_num = 0
+        num_mistakes = 0
+        num_correct = 0
 
+        # Go through training examples
+        for x, y in D[:]:
+
+            # Skip empty data points
+            if len(x) < 1: continue
+
+            # Perform standard weight update
+            # TODO: Best-first beam search (without update!)
+            correct, mistake, num_right_chars, instance_str, err_display = \
+                self.early_update(x, y, (str(it) + "." + str(train_num)))
+
+            num_correct += correct
+            num_mistakes += mistake
+            instance_str += ("\t[" + str(num_correct) + "/"
+                             + str(train_num + 1) + "]")
+            instance_str += err_display
+
+            # Print instance details and update training number
+            print(instance_str)
+            train_num += 1
+
+        # Determine accuracy
+        accuracy = num_correct / (num_correct + num_mistakes)
+        acc_progress.append(accuracy)
+
+        # Return accuracy
         return 0.0
 
     def standard_update(self, x, y, train_instance):
@@ -206,8 +234,6 @@ class StructuredPerceptron:
         Beam update:    Reset beam with intial state (or discontinue search)
         """
 
-        # TODO: Adapt to early update
-
         # Initialize beam search tree
         h = lambda y: self.get_score(x, y)
         bs = BeamSearch(self.b, h, y, self.alphabet)
@@ -243,13 +269,7 @@ class StructuredPerceptron:
         result_char = ""
 
         # Show real output and predicted output!
-        err_display = "\n"
-        err_display += ("\t\t\t" + " " + "".join(\
-              ["_" if y_hat[i] != y[i] else " " for i in range(len(y))]) \
-              + " \n")
-        err_display += ("\t\t\t" + "'" + "".join(y_hat).upper() + "'\n")
-        err_display += ("\t\t\t" + "'" + "".join(y).upper() + "'" + "*\n")
-        err_display += ("\n")
+        err_display = self.give_err_bars(y, y_hat)
 
         if y_hat != y:
             result_char = "-"
@@ -640,6 +660,22 @@ class StructuredPerceptron:
         """ Allow the outside to set our scoring function weights """
 
         self.w = w
+
+    def give_err_bars(self, y, y_hat):
+        """ Show error bars above incorrect chars in y_hat """
+
+        # NOTE: Assuming all chars in alphabet are same length
+        char_len = len(list(self.alphabet)[0])
+
+        err_display = "\n"
+        err_display += ("\t\t\t" + " " + "".join(\
+              [("_" * char_len) if y_hat[i] != y[i] else (" " * char_len) \
+                for i in range(len(y))]) + " \n")
+        err_display += ("\t\t\t" + "'" + "".join(y_hat).upper() + "'\n")
+        err_display += ("\t\t\t" + "'" + "".join(y).upper() + "'" + "*\n")
+        err_display += ("\n")
+
+        return err_display
 
     def display_header(self, D):
         print()

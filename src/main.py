@@ -77,7 +77,7 @@ def main():
     data_dir = "data/"
     raw_train_test = get_data_files(data_dir)
 
-    for raw_train, raw_test in raw_train_test[1:]:
+    for raw_train, raw_test in raw_train_test[:]:
 
         print("Parsing training and testing data:")
         print("\t" + raw_train)
