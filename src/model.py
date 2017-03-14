@@ -13,6 +13,9 @@ STRUCTURED PERCEPTRON
 Methods immediately relevant to the concept of a generalized perceptron
 """
 
+# TODO: Hamming loss for training accuracy too!
+# TODO: Implement max-violation update policy!
+
 class StructuredPerceptron:
 
     # NOTE: Any variable declared outside of the constructor is a static
@@ -147,6 +150,10 @@ class StructuredPerceptron:
             - Hamming accuracy: (num_correct_characters / num_total_characters);
         """
 
+        print()
+        print("Testing model")
+        print()
+
         train_num = 0
         num_mistakes = 0
         num_correct = 0
@@ -162,6 +169,7 @@ class StructuredPerceptron:
             y_hat, correct, mistake, num_right_chars, instance_str = \
                 self.pure_inference(x, y, ("T" + "." + str(train_num)))
 
+            # Collect accuracy data
             num_correct += correct
             num_mistakes += mistake
             hamming_loss += list_diff(y_hat, y) / len(y)
