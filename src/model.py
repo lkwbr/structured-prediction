@@ -22,7 +22,18 @@ class StructuredPerceptron:
     # variable, and will change all instances of this class if they are changed;
     # however, object variables (declared in __init__) are unique to the object.
 
-    def __init__(self, alphabet, len_x, phi_order, R, eta, MAX, b = None):
+    def __init__(self, alphabet, len_x, phi_order, mi, R, eta, MAX, b = None):
+
+        # Candy shop
+        self.phi_funcs = [ \
+                self.phi_unary, \
+                self.phi_pairwise, \
+                self.phi_third_order, \
+                self.phi_fourth_order]
+        self.update_methods = [ \
+                self.standard_update, \
+                self.early_update, \
+                self.max_violation_update]
 
         self.alphabet = alphabet
         self.len_x = len_x
@@ -30,10 +41,6 @@ class StructuredPerceptron:
 
         # Detect and set phi properties dynamically
         self.phi_order = phi_order
-        self.phi_funcs = [self.phi_unary, \
-                 self.phi_pairwise, \
-                 self.phi_third_order, \
-                 self.phi_fourth_order]
         phi = self.phi_funcs[self.phi_order - 1]
 
         # Perceptron-related
@@ -41,6 +48,7 @@ class StructuredPerceptron:
         self.eta = eta                      # Learning rate
         self.MAX = MAX                      # Maximum number of iterations
         self.w = None                       # Learned weight vector
+        self.update_method = self.update_methods[mi]
 
         # Phi-related
         self.phi = phi                      # Joint-feature function
@@ -90,11 +98,8 @@ class StructuredPerceptron:
                 if len(x) < 1: continue
 
                 # Perform standard weight update
-                # NOTE: Modularized to allow for standard update, early update,
-                # and max-violation update
-                update_method = [self.standard_update, self.early_update][0]
                 y_hat, correct, mistake, num_right_chars, instance_str, err_display = \
-                    update_method(x, y, (str(it) + "." + str(train_num)))
+                    self.update_method(x, y, (str(it) + "." + str(train_num)))
 
                 num_correct += correct
                 num_mistakes += mistake
@@ -207,7 +212,7 @@ class StructuredPerceptron:
         mistake = 0
         correct = 0
 
-        instance_str = ("Train instance " + train_instance)
+        instance_str = ("Data instance " + train_instance)
         result_char = ""
 
         # If error, update weights
@@ -238,7 +243,7 @@ class StructuredPerceptron:
         mistake = 0
         correct = 0
 
-        instance_str = ("Train instance " + train_instance)
+        instance_str = ("Data instance " + train_instance)
         result_char = ""
 
         # Show real output and predicted output!
@@ -314,7 +319,7 @@ class StructuredPerceptron:
 
         # ----------------
 
-        instance_str = ("Train instance " + train_instance)
+        instance_str = ("Data instance " + train_instance)
         result_char = ""
 
         # Show real output and predicted output!
