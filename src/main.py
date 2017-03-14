@@ -54,15 +54,12 @@ weights_dir = "weights/"
 def main():
     """
     Main: Driver function
-
     Data: Handwritten words and text-to-speech
-
     Setup (for both handwriting and text-to-speech mapping) problems:
         0. Establish model parameters
         1. Parse training and testing data
         2. Train structured perceptron on training data
         3. Test on testing data
-
     Assumptions:
         0. All data in form "000001010101010101..." "[label]"
     """

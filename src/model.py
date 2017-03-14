@@ -41,7 +41,7 @@ class StructuredPerceptron:
 
         # Phi-related
         self.phi = phi                      # Joint-feature function
-        self.phi_dimen = -1
+        self.phi_dimen = -1                 # Dimensionality of phi
         self.pairwise_base_index = -1
         self.triplet_base_index = -1
         self.quadruplet_base_index = -1
@@ -89,8 +89,8 @@ class StructuredPerceptron:
                 # Perform standard weight update
                 # NOTE: Modularized to allow for standard update, early update,
                 # and max-violation update
-                update_method = [self.standard_update, self.early_update][1]
-                correct, mistake, num_right_chars, instance_str, err_display = \
+                update_method = [self.standard_update, self.early_update][0]
+                y_hat, correct, mistake, num_right_chars, instance_str, err_display = \
                     update_method(x, y, (str(it) + "." + str(train_num)))
 
                 num_correct += correct
@@ -121,7 +121,7 @@ class StructuredPerceptron:
 
             # Report iteration stats
             print()
-            print("\t| Accuracy = " + str(accuracy * 100) + "%")
+            print("\t| Standard accuracy = " + str(accuracy * 100) + "%")
             print("\t| Number correct = " + str(num_correct))
             print("\t| Number of mistakes = " + str(num_mistakes))
             print("\t| Time = ~" + str(round((time.clock() - it_start) / 60))
@@ -141,12 +141,16 @@ class StructuredPerceptron:
 
     def test(self, D):
         """
-        Test model with our model's weights, return accuracy
+        Test model with our model's weights, collect and return two types
+        of accuracy:
+            - Standard accuracy: (num_totally_correct_outputs / num_outputs);
+            - Hamming accuracy: (num_correct_characters / num_total_characters);
         """
 
         train_num = 0
         num_mistakes = 0
         num_correct = 0
+        hamming_loss = 0
 
         # Go through training examples
         for x, y in D[:]:
@@ -155,25 +159,32 @@ class StructuredPerceptron:
             if len(x) < 1: continue
 
             # Perform standard weight update
-            correct, mistake, num_right_chars, instance_str, err_display = \
-                self.pure_inference(x, y, (str(it) + "." + str(train_num)))
+            y_hat, correct, mistake, num_right_chars, instance_str = \
+                self.pure_inference(x, y, ("T" + "." + str(train_num)))
 
             num_correct += correct
             num_mistakes += mistake
+            hamming_loss += list_diff(y_hat, y) / len(y)
+
             instance_str += ("\t[" + str(num_correct) + "/"
                              + str(train_num + 1) + "]")
-            instance_str += err_display
 
             # Print instance details and update training number
             print(instance_str)
             train_num += 1
 
-        # Determine accuracy
-        accuracy = num_correct / (num_correct + num_mistakes)
-        acc_progress.append(accuracy)
+        # Compute accuracies
+        num_examples = train_num
+        std_accuracy = num_correct / num_examples
+        hamming_accuracy = (1.0 - (hamming_loss / num_examples))
+
+        print()
+        print("\t| [Test] Standard accuracy = " + str(std_accuracy * 100) + "%")
+        print("\t| [Test] Hamming accuracy = " + str(hamming_accuracy * 100) + "%")
+        print()
 
         # Return accuracy
-        return 0.0
+        return std_accuracy
 
     def pure_inference(self, x, y, train_instance):
         """
@@ -191,15 +202,6 @@ class StructuredPerceptron:
         instance_str = ("Train instance " + train_instance)
         result_char = ""
 
-        # Show real output and predicted output!
-        err_display = "\n"
-        err_display += ("\t\t\t" + " " + "".join(\
-              ["_" if y_hat[i] != y[i] else " " for i in range(len(y))]) \
-              + " \n")
-        err_display += ("\t\t\t" + "'" + "".join(y_hat).upper() + "'\n")
-        err_display += ("\t\t\t" + "'" + "".join(y).upper() + "'" + "*\n")
-        err_display += ("\n")
-
         # If error, update weights
         if y_hat != y:
             result_char = "-"
@@ -212,7 +214,7 @@ class StructuredPerceptron:
         instance_str = ("\t[" + result_char + "]\t" + instance_str + "\t(" + \
                         str(num_right_chars) + "/" + str(len(y)) + ")")
 
-        return correct, mistake, num_right_chars, instance_str, err_display
+        return y_hat, correct, mistake, num_right_chars, instance_str
 
     def standard_update(self, x, y, train_instance):
         """
@@ -263,7 +265,7 @@ class StructuredPerceptron:
         instance_str = ("\t[" + result_char + "]\t" + instance_str + "\t(" + \
                         str(num_right_chars) + "/" + str(len(y)) + ")")
 
-        return correct, mistake, num_right_chars, instance_str, err_display
+        return y_hat, correct, mistake, num_right_chars, instance_str, err_display
 
     def early_update(self, x, y, train_instance):
         """
@@ -320,7 +322,7 @@ class StructuredPerceptron:
         instance_str = ("\t[" + result_char + "]\t" + instance_str + "\t(" + \
                         str(num_right_chars) + "/" + str(len(y)) + ")")
 
-        return correct, mistake, num_right_chars, instance_str, err_display
+        return y_hat, correct, mistake, num_right_chars, instance_str, err_display
 
     def max_violation_update(self, x, y):
         """
@@ -339,8 +341,6 @@ class StructuredPerceptron:
         Best-First Beam Search inference
         """
 
-        # TODO: Expand this to allow for us to explicitly expand the beam
-
         h = lambda y_partial: self.get_score(x, y_partial)
         bs = BeamSearch(self.b, h, y, self.alphabet)
         y_hat = bs.search()
@@ -353,6 +353,7 @@ class StructuredPerceptron:
         """
 
         # TODO
+
         pass
 
     def rgs(self, x, len_y):
@@ -361,6 +362,8 @@ class StructuredPerceptron:
         Try and use the current weights to arrive at the correct label;
         we will always return our best guess
         """
+
+        # NOTE: This RGS is not working, and the problem isn't the perceptron
 
         for i in range(self.R):
 
