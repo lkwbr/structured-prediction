@@ -155,9 +155,8 @@ class StructuredPerceptron:
             if len(x) < 1: continue
 
             # Perform standard weight update
-            # TODO: Best-first beam search (without update!)
             correct, mistake, num_right_chars, instance_str, err_display = \
-                self.early_update(x, y, (str(it) + "." + str(train_num)))
+                self.pure_inference(x, y, (str(it) + "." + str(train_num)))
 
             num_correct += correct
             num_mistakes += mistake
@@ -175,6 +174,45 @@ class StructuredPerceptron:
 
         # Return accuracy
         return 0.0
+
+    def pure_inference(self, x, y, train_instance):
+        """
+        Do pure inference without any weight update; primarily used in testing
+        """
+
+        # NOTE: There be lots of recycled code in these parts a' town
+
+        # Predict (i.e. run inference)
+        y_hat = self.bstfbs(x, y)
+        num_right_chars = len(y) - list_diff(y_hat, y)
+        mistake = 0
+        correct = 0
+
+        instance_str = ("Train instance " + train_instance)
+        result_char = ""
+
+        # Show real output and predicted output!
+        err_display = "\n"
+        err_display += ("\t\t\t" + " " + "".join(\
+              ["_" if y_hat[i] != y[i] else " " for i in range(len(y))]) \
+              + " \n")
+        err_display += ("\t\t\t" + "'" + "".join(y_hat).upper() + "'\n")
+        err_display += ("\t\t\t" + "'" + "".join(y).upper() + "'" + "*\n")
+        err_display += ("\n")
+
+        # If error, update weights
+        if y_hat != y:
+            result_char = "-"
+            mistake = 1
+
+        else:
+            result_char = "+"
+            correct = 1
+
+        instance_str = ("\t[" + result_char + "]\t" + instance_str + "\t(" + \
+                        str(num_right_chars) + "/" + str(len(y)) + ")")
+
+        return correct, mistake, num_right_chars, instance_str, err_display
 
     def standard_update(self, x, y, train_instance):
         """

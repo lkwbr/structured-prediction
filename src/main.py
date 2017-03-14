@@ -3,11 +3,12 @@
 # Luke Weber, 11398889
 # CptS 580, HW #2
 # Created 02/08/2017
-# Last edited 03/12/2017
+# Last edited 03/13/2017
 
 """
 Structured Perceptron, predicting structured outputs y_hat for
-structured inputs x with the following inference methods:
+structured inputs x with the following inference (and update)
+methods:
     - Randomized Greedy Search (RGS)
     - Standard Best-First Beam Search (BSTFBS)
     - Standard Breadth-First Beam Search (BDTFBS)
