@@ -89,8 +89,9 @@ class StructuredPerceptron:
                 # Perform standard weight update
                 # NOTE: Modularized to allow for standard update, early update,
                 # and max-violation update
+                update_method = self.standard_update
                 correct, mistake, num_right_chars, instance_str, err_display = \
-                    self.early_update(x, y, (str(it) + "." + str(train_num)))
+                    update_method(x, y, (str(it) + "." + str(train_num)))
 
                 num_correct += correct
                 num_mistakes += mistake
@@ -184,7 +185,7 @@ class StructuredPerceptron:
         """
 
         # Predict (i.e. run inference)
-        y_hat = self.bstfbs(x, len(y))
+        y_hat = self.bstfbs(x, y)
         num_right_chars = len(y) - list_diff(y_hat, y)
         mistake = 0
         correct = 0
@@ -295,14 +296,14 @@ class StructuredPerceptron:
 
         pass
 
-    def bstfbs(self, x, len_y):
+    def bstfbs(self, x, y):
         """
         Best-First Beam Search inference
         """
 
         # TODO: Expand this to allow for us to explicitly expand the beam
 
-        h = lambda y: self.get_score(x, y)
+        h = lambda y_partial: self.get_score(x, y_partial)
         bs = BeamSearch(self.b, h, y, self.alphabet)
         y_hat = bs.search()
 

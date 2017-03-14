@@ -3,17 +3,24 @@
 # Luke Weber, 11398889
 # CptS 580, HW #2
 # Created 02/08/2017
-# Last edited 03/11/2017
+# Last edited 03/12/2017
 
 """
-Structured Perceptron with Randomized Greedy Search to
-make inferences; running with varying joint-feature
-representations, such as: unary, pairwise, third-order,
-and fourth-order.
-
-NOTE: Currently, we have a problem with this program not
-converging, which is likely due to a small, language-
-dependent error.
+Structured Perceptron, predicting structured outputs y_hat for
+structured inputs x with the following inference methods:
+    - Randomized Greedy Search (RGS)
+    - Standard Best-First Beam Search (BSTFBS)
+    - Standard Breadth-First Beam Search (BDTFBS)
+    - Early Update with BSTFBS
+    - Max-Violation with BSTFS
+And on top of all this we offer a variety of joint-feature
+representations, such as:
+    - Unary
+    - Pairwise / First-order
+    - Third-order
+    - Fourth-order.
+These feature representations allow us to create
+different features for each structured input x and output y.
 """
 
 # Third-party libraries
