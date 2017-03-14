@@ -89,7 +89,7 @@ class StructuredPerceptron:
                 # Perform standard weight update
                 # NOTE: Modularized to allow for standard update, early update,
                 # and max-violation update
-                update_method = self.standard_update
+                update_method = [self.standard_update, self.early_update][1]
                 correct, mistake, num_right_chars, instance_str, err_display = \
                     update_method(x, y, (str(it) + "." + str(train_num)))
 
