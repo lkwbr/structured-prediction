@@ -24,7 +24,7 @@ class StructuredPerceptron:
 
     def __init__(self, alphabet, len_x, phi_order, mi, R, eta, MAX, b = None):
 
-        # Candy shop
+        # Candy shop - so many choices!
         self.phi_funcs = [ \
                 self.phi_unary, \
                 self.phi_pairwise, \
@@ -35,6 +35,7 @@ class StructuredPerceptron:
                 self.early_update, \
                 self.max_violation_update]
 
+        # STructure-related
         self.alphabet = alphabet
         self.len_x = len_x
         self.len_y = len(alphabet)
@@ -284,7 +285,7 @@ class StructuredPerceptron:
         """
         [ When correct label falls off the beam (via pruning), update right then ]
         Search error:   No target nodes in beam
-        Weight update:  Standard structured perceptron
+        Weight update:  Standard structured perceptron (with recent y_select)
         Beam update:    Reset beam with intial state (or discontinue search)
         """
 
@@ -337,17 +338,64 @@ class StructuredPerceptron:
 
         return y_hat, correct, mistake, num_right_chars, instance_str, err_display
 
-    def max_violation_update(self, x, y):
+    def max_violation_update(self, x, y, train_instance):
         """
         [ Use maximum violating prefix in search space to do weight update ]
-        Search error:   No target nodes in beam
-        Weight update:  Standard structured perceptron
+        Search error:   None
+        Weight update:  Standard structured perceptron (with max-violating y_partial)
         Beam update:    Reset beam with intial state (or discontinue search)
         """
 
-        #TODO
+        # TODO: Check everything, and correspond my code to Jana's comments
 
-        pass
+        # Initialize beam search tree
+        h = lambda y: self.get_score(x, y)
+        bs = BeamSearch(self.b, h, y, self.alphabet)
+        y_max_violating = None
+
+        # Beam search until target node gets pruned
+        while bs.expand():
+            min_in_beam = bs.min_in_beam()
+            if y_max_violating is not None:
+                y_max_violating = bs.rank(min_in_beam, y_max_violating)[-1]
+            else: y_max_violating = min_in_beam
+
+        # Predict (i.e. run inference)
+        y_hat = bs.complete_max_in_beam()
+        num_right_chars = len(y) - list_diff(y_hat, y)
+        mistake = 0
+        correct = 0
+
+        # ----------------
+
+        instance_str = ("Data instance " + train_instance)
+        result_char = ""
+
+        # Show real output and predicted output!
+        err_display = self.give_err_bars(y, y_hat)
+
+        if y_hat != y:
+            result_char = "-"
+            mistake = 1
+
+            # Perform weight update with maximum violating prefix we've
+            # ever seen in the beam search
+            ideal_phi = self.phi(x, y)
+            pred_phi = self.phi(x, y_max_violating)
+            self.w = np.add(self.w, np.dot(self.eta, \
+                (np.subtract(ideal_phi, pred_phi))))
+
+            # NOTE: We're not resetting the beam search after we get to
+            # the max-scoring terminal node - bad move? Not sure
+
+        else:
+            result_char = "+"
+            correct = 1
+
+        instance_str = ("\t[" + result_char + "]\t" + instance_str + "\t(" + \
+            str(num_right_chars) + "/" + str(len(y)) + ")")
+
+        return y_hat, correct, mistake, num_right_chars, instance_str, err_display
 
     def bstfbs(self, x, y):
         """
@@ -823,14 +871,22 @@ class BeamSearch:
         y_hat = self.max_in_beam()
         return y_hat
 
-    def max_in_beam(self):
-        """ Return maximum scoring node in beam w.r.t. heuristic h """
+    def _reduce_beam(self, func):
+        """ Apply some function to the beam and get some corresponding node """
 
         # Use dictionary of beam, mapping (encoded) y to it's score
         beam_node_scores = {self.encode_y(y):self.h(y) for y in self.beam}
-        beam_max = max(beam_node_scores, key = \
+        beam_subject = func(beam_node_scores, key = \
             (lambda y: beam_node_scores[y]), default = [])
-        return self.decode_y(beam_max)
+        return self.decode_y(beam_subject)
+
+    def min_in_beam(self):
+        """ Return minimum scoring node in beam """
+        return self._reduce_beam(min)
+
+    def max_in_beam(self):
+        """ Return maximum scoring node in beam w.r.t. heuristic h """
+        return self._reduce_beam(max)
 
     def contains_target(self):
         """ Boolean returned indicating if beam contains a target node """
@@ -866,3 +922,11 @@ class BeamSearch:
             children.append(child)
 
         return children
+
+    def rank(self, *inputs):
+        """
+        Rank the given inputs according to our current heuristic from
+        lowest to highest
+        """
+        sorted_inputs = sorted(inputs, key = lambda y: self.h(y))[:self.b]
+        return sorted_inputs
