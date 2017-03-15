@@ -281,6 +281,8 @@ class StructuredPerceptron:
 
         return y_hat, correct, mistake, num_right_chars, instance_str, err_display
 
+    # TODO: Do early update and max-violation according to Jana's update
+
     def early_update(self, x, y, train_instance):
         """
         [ When correct label falls off the beam (via pruning), update right then ]
@@ -345,8 +347,6 @@ class StructuredPerceptron:
         Weight update:  Standard structured perceptron (with max-violating y_partial)
         Beam update:    Reset beam with intial state (or discontinue search)
         """
-
-        # TODO: Check everything, and correspond my code to Jana's comments
 
         # Initialize beam search tree
         h = lambda y: self.get_score(x, y)
