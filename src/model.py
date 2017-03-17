@@ -369,23 +369,25 @@ class StructuredPerceptron:
 
             # Maximally scoring non-target node, as well as target node which
             # represents (correct) prefix of same length
-            prefix = y[:(t + 1)]
+            max_node_len = len(max(b_t, key = len))
+            prefix = y[:max_node_len]
             present_target = prefix
             non_target_nodes = [node for node in b_t \
                                 if node != present_target \
                                 and len(node) == len(present_target)]
-            best_non_target = max(non_target_nodes, \
-                key = lambda item: ) 
 
-            print(best_non_target)
-            print(non_target_nodes)
-            print(b_t)
-            print(y)
-            print(present_target)
+            #print()
+            #print(prefix)
+            #print(b_t)
+            #print(non_target_nodes)
+            best_non_target = max(non_target_nodes, \
+                key = lambda item: bs.score(item))
 
             # NOTE: Does sign matter here?
-            violation = bs.score(present_target) - bs.score(matching_non_target)
-            best_prefix_pairs.append((present_target, matching_non_target, \
+            # TODO: Incorporate absolute value
+            violation = math.abs(bs.score(present_target) - \
+                bs.score(best_non_target))
+            best_prefix_pairs.append((present_target, best_non_target, \
                 violation))
 
             # NOTE: Due to the nature of our beam search, we will have only
@@ -394,6 +396,16 @@ class StructuredPerceptron:
 
         # Return maximum in best_prefix_pairs w.r.t. violation
         max_violating = max(best_prefix_pairs, key = lambda pair: pair[2])
+        print(max_violating)
+
+        # Perform weight update with maximum violating prefix we've
+        # ever seen in the beam search
+        ideal_phi = self.phi(x, max_violating[0])
+        pred_phi = self.phi(x, max_violating[1])
+        self.w = np.add(self.w, np.dot(self.eta, \
+            (np.subtract(ideal_phi, pred_phi))))
+
+        # ----------------
 
         # Predict (i.e. run inference)
         y_hat = bs.complete_max_in_beam()
@@ -401,7 +413,6 @@ class StructuredPerceptron:
         mistake = 0
         correct = 0
 
-        # ----------------
 
         instance_str = ("Data instance " + train_instance)
         result_char = ""
@@ -413,13 +424,6 @@ class StructuredPerceptron:
         if y_hat != y:
             result_char = "-"
             mistake = 1
-
-            # Perform weight update with maximum violating prefix we've
-            # ever seen in the beam search
-            ideal_phi = self.phi(x, y)
-            pred_phi = self.phi(x, max_violating)
-            self.w = np.add(self.w, np.dot(self.eta, \
-                (np.subtract(ideal_phi, pred_phi))))
 
         else:
             result_char = "+"
