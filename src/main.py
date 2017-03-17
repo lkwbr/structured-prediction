@@ -77,7 +77,8 @@ def main():
     MAX = 50
     phi_order = 2   # e.g. 1 = unary, 2 = pairwise, 3 = third-order, etc.
     b = 5           # Beam width
-    mi = 0          # Method index
+    mi = 2          # Method index
+    load_w = False
 
     # Raw training and testing data
     data_dir = "data/"
@@ -97,7 +98,6 @@ def main():
         sp = StructuredPerceptron(alphabet, len_x, phi_order, mi, R, eta, MAX, b)
 
         # NOTE: We can either train for weights, or load them
-        load_w = False
         if load_w: w = load_w()
         else: w = sp.train(train)
 

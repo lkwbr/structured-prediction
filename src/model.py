@@ -282,6 +282,7 @@ class StructuredPerceptron:
         return y_hat, correct, mistake, num_right_chars, instance_str, err_display
 
     # TODO: Do early update and max-violation according to Jana's update
+    # TODO: Breadth-first search
 
     def early_update(self, x, y, train_instance):
         """
@@ -348,17 +349,51 @@ class StructuredPerceptron:
         Beam update:    Reset beam with intial state (or discontinue search)
         """
 
+        # TODO: Find candidate prefix as best
+        # TODO: Update weights between candidate prefix at time t and the
+        # target path prefix at time t
+
         # Initialize beam search tree
         h = lambda y: self.get_score(x, y)
         bs = BeamSearch(self.b, h, y, self.alphabet)
-        y_max_violating = None
+        beam_history = []
 
-        # Beam search until target node gets pruned
+        # Beam search until we hit any terminal node
         while bs.expand():
-            min_in_beam = bs.min_in_beam()
-            if y_max_violating is not None:
-                y_max_violating = bs.rank(min_in_beam, y_max_violating)[-1]
-            else: y_max_violating = min_in_beam
+            beam_copy = copy.deepcopy(bs.beam)
+            beam_history.append(beam_copy)
+
+        # Review each beam b_t in the beam history
+        best_prefix_pairs = []
+        for t, b_t in enumerate(beam_history):
+
+            # Maximally scoring non-target node, as well as target node which
+            # represents (correct) prefix of same length
+            prefix = y[:(t + 1)]
+            present_target = prefix
+            non_target_nodes = [node for node in b_t \
+                                if node != present_target \
+                                and len(node) == len(present_target)]
+            best_non_target = max(non_target_nodes, \
+                key = lambda item: ) 
+
+            print(best_non_target)
+            print(non_target_nodes)
+            print(b_t)
+            print(y)
+            print(present_target)
+
+            # NOTE: Does sign matter here?
+            violation = bs.score(present_target) - bs.score(matching_non_target)
+            best_prefix_pairs.append((present_target, matching_non_target, \
+                violation))
+
+            # NOTE: Due to the nature of our beam search, we will have only
+            # one target node (for any particular tree) of some arbitrary
+            # prefix length t
+
+        # Return maximum in best_prefix_pairs w.r.t. violation
+        max_violating = max(best_prefix_pairs, key = lambda pair: pair[2])
 
         # Predict (i.e. run inference)
         y_hat = bs.complete_max_in_beam()
@@ -374,6 +409,7 @@ class StructuredPerceptron:
         # Show real output and predicted output!
         err_display = self.give_err_bars(y, y_hat)
 
+        # Do weight update
         if y_hat != y:
             result_char = "-"
             mistake = 1
@@ -381,12 +417,9 @@ class StructuredPerceptron:
             # Perform weight update with maximum violating prefix we've
             # ever seen in the beam search
             ideal_phi = self.phi(x, y)
-            pred_phi = self.phi(x, y_max_violating)
+            pred_phi = self.phi(x, max_violating)
             self.w = np.add(self.w, np.dot(self.eta, \
                 (np.subtract(ideal_phi, pred_phi))))
-
-            # NOTE: We're not resetting the beam search after we get to
-            # the max-scoring terminal node - bad move? Not sure
 
         else:
             result_char = "+"
@@ -898,15 +931,6 @@ class BeamSearch:
             if y_str.find(y_node_str) == 0: return True
         return False
 
-    def encode_y(self, y):
-        """ Encode y from list to string """
-        return "-".join(y)
-
-    def decode_y(self, y):
-        """ Decode y from string to list """
-        if y == []: return []
-        return y.split("-")
-
     def gen_children(self, y):
         """
         Using alphabet and given (partial) labelling y, generate list of
@@ -930,3 +954,32 @@ class BeamSearch:
         """
         sorted_inputs = sorted(inputs, key = lambda y: self.h(y))[:self.b]
         return sorted_inputs
+
+    def score(self, y):
+        """ Use heuristic to return score of given input y """
+        return self.h(y)
+
+    @staticmethod
+    def encode_y(y):
+        """ Encode y from list to string """
+        return "-".join(y)
+
+    @staticmethod
+    def decode_y(y):
+        """ Decode y from string to list """
+        if y == []: return []
+        return y.split("-")
+
+    @staticmethod
+    def give_target_nodes(arr, y):
+        """ Give proper prefixes of complete output y in given array """
+
+        encoded_arr = list(map(lambda item: \
+            BeamSearch.encode_y(item), arr))
+        encoded_y = BeamSearch.encode_y(y)
+        target_nodes = []
+        for item in encoded_arr:
+            if encoded_y.find(item) == 0:
+                decoded_item = BeamSearch.decode_y(item)
+                target_nodes.append(decoded_item)
+        return target_nodes
