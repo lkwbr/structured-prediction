@@ -9,6 +9,13 @@ percpetron, but more to the maintainance and assistance of
 more basic computation in program
 """
 
+# A custom annotation to denote child overriding method of parent
+def overrides(interface_class):
+    def overrider(method):
+        assert(method.__name__ in dir(interface_class))
+        return method
+    return overrider
+
 def dprint(s):
     if verbose: print(s)
 

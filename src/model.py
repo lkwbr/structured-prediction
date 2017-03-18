@@ -13,9 +13,8 @@ STRUCTURED PERCEPTRON
 Methods immediately relevant to the concept of a generalized perceptron
 """
 
-# TODO: Do early update and max-violation according to Jana's update
-# TODO: Breadth-first search
-# TODO: Hamming loss for training accuracy too!
+# TODO: Possibly fix our Hamming accuracy calculations, because under low training
+# examples, it will give us sub-zero accuracies. I don't like this.
 
 class StructuredPerceptron:
 
@@ -23,20 +22,24 @@ class StructuredPerceptron:
     # variable, and will change all instances of this class if they are changed;
     # however, object variables (declared in __init__) are unique to the object.
 
-    def __init__(self, alphabet, len_x, phi_order, mi, R, eta, MAX, b = None):
+    def __init__(self, alphabet, len_x, phi_order, update_method, search_type, \
+        R, eta, MAX, b):
 
         # Candy shop - so many choices!
         self.phi_funcs = [ \
-                self.phi_unary, \
-                self.phi_pairwise, \
-                self.phi_third_order, \
-                self.phi_fourth_order]
+            self.phi_unary, \
+            self.phi_pairwise, \
+            self.phi_third_order, \
+            self.phi_fourth_order]
         self.update_methods = [ \
-                self.standard_update, \
-                self.early_update, \
-                self.max_violation_update]
+            self.standard_update, \
+            self.early_update, \
+            self.max_violation_update]
+        self.search_types = [ \
+            BestFirstBeamSearch,
+            BreadthFirstBeamSearch]
 
-        # STructure-related
+        # Structure-related
         self.alphabet = alphabet
         self.len_x = len_x
         self.len_y = len(alphabet)
@@ -50,7 +53,7 @@ class StructuredPerceptron:
         self.eta = eta                      # Learning rate
         self.MAX = MAX                      # Maximum number of iterations
         self.w = None                       # Learned weight vector
-        self.update_method = self.update_methods[mi]
+        self.update_method = self.update_methods[update_method]
 
         # Phi-related
         self.phi = phi                      # Joint-feature function
@@ -62,8 +65,11 @@ class StructuredPerceptron:
         self.triplets = []
         self.quadruplets = []
 
-        # (Optional) beam width
+        # Beam search related
         self.b = b
+        self.search_obj = self.search_types[search_type]
+
+    # Main methods: training and testing with provided data
 
     def train(self, D):
         """ Train on input data set D """
@@ -72,12 +78,13 @@ class StructuredPerceptron:
         self.display_header(D)
 
         # Record model's progress w.r.t. accuracy (and iteration improvment)
-        hamming_accuracy = 0
+        hamming_loss = 0
         it_improvement = np.zeros((len(D)))
         acc_progress = []
         pw = pg.plot()
 
-        # Reset weights of scoring function to 0
+        # Reset weights of scoring function to 0; useful if we ever train
+        # more than once for this same model instance
         if self.w is not None: self.w.fill(0)
 
         # Iterate until max iterations or convergence
@@ -94,7 +101,8 @@ class StructuredPerceptron:
             num_correct = 0
 
             # Go through training examples
-            for x, y in D[:]:
+            # TODO: Remove data restriction
+            for x, y in D[:10]:
 
                 # Skip empty data points
                 # TODO: See if we can remove this
@@ -104,10 +112,12 @@ class StructuredPerceptron:
                 y_hat, correct, mistake, num_right_chars, instance_str, err_display = \
                     self.update_method(x, y, (str(it) + "." + str(train_num)))
 
+                # Compute/determine accuracy stats
                 num_correct += correct
                 num_mistakes += mistake
                 instance_str += ("\t[" + str(num_correct) + "/"
                                  + str(train_num + 1) + "]")
+                hamming_loss += list_diff(y_hat, y) / len(y)
 
                 # Measure iteration improvement (compared to last)
                 if (it > 0):
@@ -122,7 +132,9 @@ class StructuredPerceptron:
                 train_num += 1
 
             # Determine accuracy
-            accuracy = num_correct / (num_correct + num_mistakes)
+            num_examples = train_num
+            accuracy = num_correct / num_examples
+            hamming_accuracy = (1.0 - (hamming_loss / num_examples))
             acc_progress.append(accuracy)
 
             # Plot accuracy timeline
@@ -133,6 +145,7 @@ class StructuredPerceptron:
             # Report iteration stats
             print()
             print("\t| Standard accuracy = " + str(accuracy * 100) + "%")
+            print("\t| Hamming accuracy = " + str(hamming_accuracy * 100) + "%")
             print("\t| Number correct = " + str(num_correct))
             print("\t| Number of mistakes = " + str(num_mistakes))
             print("\t| Time = ~" + str(round((time.clock() - it_start) / 60))
@@ -202,6 +215,8 @@ class StructuredPerceptron:
         # Return testing accuracy
         return hamming_accuracy
 
+    # Inference and (weight) update methods
+
     def pure_inference(self, x, y, train_instance):
         """
         Do pure inference without any weight update; primarily used in testing
@@ -210,7 +225,11 @@ class StructuredPerceptron:
         # NOTE: There be lots of recycled code in these parts a' town
 
         # Predict (i.e. run inference)
-        y_hat = self.bstfbs(x, y)
+        h = lambda y_partial: self.get_score(x, y_partial)
+        bs = self.search_obj(self.b, h, y, self.alphabet)
+        y_hat = bs.search()
+
+        # Accuracy stuff
         num_right_chars = len(y) - list_diff(y_hat, y)
         mistake = 0
         correct = 0
@@ -241,7 +260,11 @@ class StructuredPerceptron:
         """
 
         # Predict (i.e. run inference)
-        y_hat = self.bstfbs(x, y)
+        h = lambda y_partial: self.get_score(x, y_partial)
+        bs = self.search_obj(self.b, h, y, self.alphabet)
+        y_hat = bs.search()
+
+        # Collect accuracy
         num_right_chars = len(y) - list_diff(y_hat, y)
         mistake = 0
         correct = 0
@@ -293,7 +316,7 @@ class StructuredPerceptron:
 
         # Initialize beam search tree
         h = lambda y: self.get_score(x, y)
-        bs = BeamSearch(self.b, h, y, self.alphabet)
+        bs = self.search_obj(self.b, h, y, self.alphabet)
         y_detour = None
         y_matching = None
 
@@ -377,7 +400,7 @@ class StructuredPerceptron:
 
         # Initialize beam search tree
         h = lambda y: self.get_score(x, y)
-        bs = BeamSearch(self.b, h, y, self.alphabet)
+        bs = self.search_obj(self.b, h, y, self.alphabet)
         beam_history = []
 
         # Beam search until we hit any terminal node
@@ -457,26 +480,6 @@ class StructuredPerceptron:
 
         return y_hat, correct, mistake, num_right_chars, instance_str, err_display
 
-    def bstfbs(self, x, y):
-        """
-        Best-First Beam Search inference
-        """
-
-        h = lambda y_partial: self.get_score(x, y_partial)
-        bs = BeamSearch(self.b, h, y, self.alphabet)
-        y_hat = bs.search()
-
-        return y_hat
-
-    def bdthfbs(self, x, len_y):
-        """
-        Breadth-First Beam Search inference
-        """
-
-        # TODO
-
-        pass
-
     def rgs(self, x, len_y):
         """
         Randomized Greedy Search (RGS) inference:
@@ -484,7 +487,7 @@ class StructuredPerceptron:
         we will always return our best guess
         """
 
-        # NOTE: This RGS is not working, and the problem isn't the perceptron
+        # NOTE: RGS performs terribly and takes way to much time :(
 
         for i in range(self.R):
 
@@ -500,6 +503,8 @@ class StructuredPerceptron:
                 y_hat = y_max
 
         return y_hat
+
+    # Phi methods
 
     def phi_unary(self, x, y):
         """
@@ -755,6 +760,8 @@ class StructuredPerceptron:
 
         return vect
 
+    # Class utility methods
+
     def get_score(self, x, y_hat):
         """
         Compute score of joint-feature function with weights,
@@ -821,7 +828,6 @@ class StructuredPerceptron:
 
     def set_weights(self, w):
         """ Allow the outside to set our scoring function weights """
-
         self.w = w
 
     def give_err_bars(self, y, y_hat):
@@ -853,7 +859,7 @@ class StructuredPerceptron:
         print()
 
 class BeamSearch:
-    """ """
+    """ Parent class for basic beam search """
 
     def __init__(self, b, h, y, alphabet):
         """ Construct beam properties necessary for heuristic search """
@@ -884,27 +890,10 @@ class BeamSearch:
         """
         Perform single expansion from beam; return false if terminal node is hit,
         otherwise return true
+
+        NOTE: Child inheritor should override this method
         """
-
-        # [Grab] maximum scoring output in beam
-        self.y_select = self.max_in_beam()
-
-        # [Expand] upon maximum scoring (partial) output
-        # NOTE: We don't expand beyond terminal length
-        candidates = self.beam + self.gen_children(self.y_select)
-        if len(self.y_select) > 0: candidates.remove(self.y_select)
-
-        # [Prune] excess, lower-scoring nodes; reverse sorting, hence
-        # negating the value from our heuristic function; randomly
-        # shuffle candidates (before sorting) to give equally scoring
-        # nodes a fair chance
-        random.shuffle(candidates)
-        self.beam = sorted(candidates, key = lambda y: -self.h(y))[:self.b]
-
-        # [Check] for terminal node/output
-        for out in self.beam:
-            if len(out) == self.term_len: return False
-        return True
+        raise NotImplementedError
 
     def search(self):
         """
@@ -1010,3 +999,61 @@ class BeamSearch:
                 decoded_item = BeamSearch.decode_y(item)
                 target_nodes.append(decoded_item)
         return target_nodes
+
+class BestFirstBeamSearch(BeamSearch):
+    def __init__(self, b, h, y, alphabet):
+        super().__init__(b, h, y, alphabet)
+
+    @overrides(BeamSearch)
+    def expand(self):
+        """
+        Expand best-scoring node in beam; return false if terminal node is hit,
+        otherwise return true
+        """
+
+        # [Grab] maximum scoring output in beam
+        self.y_select = self.max_in_beam()
+
+        # [Expand] upon maximum scoring (partial) output
+        # NOTE: We don't expand beyond terminal length
+        candidates = self.beam + self.gen_children(self.y_select)
+        if len(self.y_select) > 0: candidates.remove(self.y_select)
+
+        # [Prune] excess, lower-scoring nodes; reverse sorting, hence
+        # negating the value from our heuristic function; randomly
+        # shuffle candidates (before sorting) to give equally scoring
+        # nodes a fair chance
+        random.shuffle(candidates)
+        self.beam = sorted(candidates, key = lambda y: -self.h(y))[:self.b]
+
+        # [Check] for terminal node/output
+        for out in self.beam:
+            if len(out) == self.term_len: return False
+        return True
+
+class BreadthFirstBeamSearch(BeamSearch):
+    def __init__(self):
+        super().__init__(b, h, y, alphabet)
+
+    @overrides(BeamSearch)
+    def expand(self):
+        """
+        Expand every node in beam; return false if terminal node is hit,
+        otherwise return true
+        """
+
+        # [Expand] upon every (partial) output in beam
+        # NOTE: Implicitly only keeping children of expanded parents, leaving
+        # parents behind in the dust
+        candidates = []
+        for y_partial in beam:
+            candidates += self.gen_children(self.y_partial)
+
+        # [Prune] excess, lower-scoring nodes - maintain beam width
+        random.shuffle(candidates)
+        self.beam = sorted(candidates, key = lambda y: -self.h(y))[:self.b]
+
+        # [Check] for terminal node/output
+        for out in self.beam:
+            if len(out) == self.term_len: return False
+        return True
