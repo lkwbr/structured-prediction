@@ -72,6 +72,7 @@ class StructuredPerceptron:
         self.display_header(D)
 
         # Record model's progress w.r.t. accuracy (and iteration improvment)
+        hamming_accuracy = 0
         it_improvement = np.zeros((len(D)))
         acc_progress = []
         pw = pg.plot()
@@ -146,8 +147,8 @@ class StructuredPerceptron:
                     print("\tIteration = " + str(it))
                     break
 
-        # Return and save weights!
-        return
+        # Return training accuracy
+        return hamming_accuracy
 
     def test(self, D):
         """
@@ -198,8 +199,8 @@ class StructuredPerceptron:
         print("\t| [Test] Hamming accuracy = " + str(hamming_accuracy * 100) + "%")
         print()
 
-        # Return accuracy
-        return std_accuracy
+        # Return testing accuracy
+        return hamming_accuracy
 
     def pure_inference(self, x, y, train_instance):
         """
@@ -308,7 +309,7 @@ class StructuredPerceptron:
                 # NOTE: We use last y-select as node we use for
                 # weight update; y-detour denotes the node which led us
                 # to expand and remove a target node from the beam
-                y_detour = bs.rank(bs.beam)[-1] #bs.y_select
+                y_detour = bs.rank(*bs.beam)[-1] #bs.y_select
                 y_matching = y[:len(y_detour)]
 
                 print("y", y)
@@ -337,16 +338,21 @@ class StructuredPerceptron:
         err_display = self.give_err_bars(y, y_hat)
 
         if y_hat != y:
+
             result_char = "-"
             mistake = 1
 
             print("beam post", bs.beam)
 
-            # Perform weight update
-            ideal_phi = self.phi(x, y_matching)
-            pred_phi = self.phi(x, y_detour)
-            self.w = np.add(self.w, np.dot(self.eta, \
-                (np.subtract(ideal_phi, pred_phi))))
+            # NOTE: We only update when there is a detouring parent, but not
+            # when we pick the incorrect terminating node
+            if y_detour is not None:
+
+                # Perform weight update
+                ideal_phi = self.phi(x, y_matching)
+                pred_phi = self.phi(x, y_detour)
+                self.w = np.add(self.w, np.dot(self.eta, \
+                    (np.subtract(ideal_phi, pred_phi))))
 
         else:
             result_char = "+"
