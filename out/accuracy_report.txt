@@ -1,0 +1,15 @@
+-----------------------
+TESTING (OCR)
+-----------------------
+
+Standard update
+	Standard:
+	Hamming:
+
+Early update
+	Standard:
+	Hamming:
+
+Max-violation update
+	Standard:	5.2%	
+	Hamming:	58.8%

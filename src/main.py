@@ -77,7 +77,7 @@ def main():
     MAX = 50
     phi_order = 2   # e.g. 1 = unary, 2 = pairwise, 3 = third-order, etc.
     b = 5           # Beam width
-    mi = 2          # Method index
+    mi = 1          # Method index
     load_w = False
 
     # Raw training and testing data

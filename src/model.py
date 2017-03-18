@@ -13,8 +13,9 @@ STRUCTURED PERCEPTRON
 Methods immediately relevant to the concept of a generalized perceptron
 """
 
+# TODO: Do early update and max-violation according to Jana's update
+# TODO: Breadth-first search
 # TODO: Hamming loss for training accuracy too!
-# TODO: Implement max-violation update policy!
 
 class StructuredPerceptron:
 
@@ -281,9 +282,6 @@ class StructuredPerceptron:
 
         return y_hat, correct, mistake, num_right_chars, instance_str, err_display
 
-    # TODO: Do early update and max-violation according to Jana's update
-    # TODO: Breadth-first search
-
     def early_update(self, x, y, train_instance):
         """
         [ When correct label falls off the beam (via pruning), update right then ]
@@ -295,6 +293,8 @@ class StructuredPerceptron:
         # Initialize beam search tree
         h = lambda y: self.get_score(x, y)
         bs = BeamSearch(self.b, h, y, self.alphabet)
+        y_detour = None
+        y_matching = None
 
         # Beam search until target node gets pruned
         while bs.expand():
@@ -302,18 +302,25 @@ class StructuredPerceptron:
             # Error: target node has been pruned
             if not bs.contains_target():
 
-                # NOTE: Assuming we use last y-select as node we use for
-                # weight update
-                y_hat = bs.y_select
+                # Only want earliest error
+                if y_detour is not None: continue
 
-                # Perform weight update
-                ideal_phi = self.phi(x, y)
-                pred_phi = self.phi(x, y_hat)
-                self.w = np.add(self.w, np.dot(self.eta, \
-                    (np.subtract(ideal_phi, pred_phi))))
+                # NOTE: We use last y-select as node we use for
+                # weight update; y-detour denotes the node which led us
+                # to expand and remove a target node from the beam
+                y_detour = bs.rank(bs.beam)[-1] #bs.y_select
+                y_matching = y[:len(y_detour)]
 
-                # Reset beam search
-                bs.reset()
+                print("y", y)
+                print("y_detour", y_detour)
+                print("y_matching", y_matching)
+                print("beam at", bs.beam)
+                print()
+
+                # NOTE: Wait until terminal node is reached before performing
+                # weight update with the previous two structured outputs; note
+                # that there is no way of acheiving a correct output at this
+                # point (because no target node in beam!)
 
         # Predict (i.e. run inference)
         y_hat = bs.complete_max_in_beam()
@@ -332,6 +339,15 @@ class StructuredPerceptron:
         if y_hat != y:
             result_char = "-"
             mistake = 1
+
+            print("beam post", bs.beam)
+
+            # Perform weight update
+            ideal_phi = self.phi(x, y_matching)
+            pred_phi = self.phi(x, y_detour)
+            self.w = np.add(self.w, np.dot(self.eta, \
+                (np.subtract(ideal_phi, pred_phi))))
+
         else:
             result_char = "+"
             correct = 1
@@ -370,8 +386,7 @@ class StructuredPerceptron:
             # Maximally scoring non-target node, as well as target node which
             # represents (correct) prefix of same length
             max_node_len = len(max(b_t, key = len))
-            prefix = y[:max_node_len]
-            present_target = prefix
+            present_target = y[:max_node_len] # Prefix at time t
             non_target_nodes = [node for node in b_t \
                                 if node != present_target \
                                 and len(node) == len(present_target)]
@@ -385,7 +400,7 @@ class StructuredPerceptron:
 
             # NOTE: Does sign matter here?
             # TODO: Incorporate absolute value
-            violation = math.abs(bs.score(present_target) - \
+            violation = abs(bs.score(present_target) - \
                 bs.score(best_non_target))
             best_prefix_pairs.append((present_target, best_non_target, \
                 violation))
@@ -394,16 +409,12 @@ class StructuredPerceptron:
             # one target node (for any particular tree) of some arbitrary
             # prefix length t
 
+        print("Best prefix pairs:")
+        print(best_prefix_pairs)
+
         # Return maximum in best_prefix_pairs w.r.t. violation
         max_violating = max(best_prefix_pairs, key = lambda pair: pair[2])
         print(max_violating)
-
-        # Perform weight update with maximum violating prefix we've
-        # ever seen in the beam search
-        ideal_phi = self.phi(x, max_violating[0])
-        pred_phi = self.phi(x, max_violating[1])
-        self.w = np.add(self.w, np.dot(self.eta, \
-            (np.subtract(ideal_phi, pred_phi))))
 
         # ----------------
 
@@ -413,17 +424,23 @@ class StructuredPerceptron:
         mistake = 0
         correct = 0
 
-
         instance_str = ("Data instance " + train_instance)
         result_char = ""
 
         # Show real output and predicted output!
         err_display = self.give_err_bars(y, y_hat)
 
-        # Do weight update
+        # Do weight update upon prediction error
         if y_hat != y:
             result_char = "-"
             mistake = 1
+
+            # Perform weight update with maximum violating prefix we've
+            # ever seen in the beam search
+            ideal_phi = self.phi(x, max_violating[0])
+            pred_phi = self.phi(x, max_violating[1])
+            self.w = np.add(self.w, np.dot(self.eta, \
+                (np.subtract(ideal_phi, pred_phi))))
 
         else:
             result_char = "+"
