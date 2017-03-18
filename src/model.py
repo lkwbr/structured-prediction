@@ -15,6 +15,7 @@ Methods immediately relevant to the concept of a generalized perceptron
 
 # TODO: Possibly fix our Hamming accuracy calculations, because under low training
 # examples, it will give us sub-zero accuracies. I don't like this.
+# TODO: Address max-violation abnormalities
 
 class StructuredPerceptron:
 
@@ -81,7 +82,7 @@ class StructuredPerceptron:
         hamming_loss = 0
         it_improvement = np.zeros((len(D)))
         acc_progress = []
-        pw = pg.plot()
+        #pw = pg.plot()
 
         # Reset weights of scoring function to 0; useful if we ever train
         # more than once for this same model instance
@@ -102,7 +103,7 @@ class StructuredPerceptron:
 
             # Go through training examples
             # TODO: Remove data restriction
-            for x, y in D[:10]:
+            for x, y in D[:]:
 
                 # Skip empty data points
                 # TODO: See if we can remove this
@@ -139,9 +140,11 @@ class StructuredPerceptron:
 
             # Plot accuracy timeline
             if len(acc_progress) > 1:
-                pw.plot(acc_progress, clear = True)
-                pg.QtGui.QApplication.processEvents()
-
+                pass
+                # NOTE: Uncommented plotting for efficiency
+                #pw.plot(acc_progress, clear = True)
+                #pg.QtGui.QApplication.processEvents()
+#
             # Report iteration stats
             print()
             print("\t| Standard accuracy = " + str(accuracy * 100) + "%")
@@ -335,12 +338,6 @@ class StructuredPerceptron:
                 y_detour = bs.rank(*bs.beam)[-1] #bs.y_select
                 y_matching = y[:len(y_detour)]
 
-                print("y", y)
-                print("y_detour", y_detour)
-                print("y_matching", y_matching)
-                print("beam at", bs.beam)
-                print()
-
                 # NOTE: Wait until terminal node is reached before performing
                 # weight update with the previous two structured outputs; note
                 # that there is no way of acheiving a correct output at this
@@ -364,8 +361,6 @@ class StructuredPerceptron:
 
             result_char = "-"
             mistake = 1
-
-            print("beam post", bs.beam)
 
             # NOTE: We only update when there is a detouring parent, but not
             # when we pick the incorrect terminating node
@@ -394,10 +389,6 @@ class StructuredPerceptron:
         Beam update:    Reset beam with intial state (or discontinue search)
         """
 
-        # TODO: Find candidate prefix as best
-        # TODO: Update weights between candidate prefix at time t and the
-        # target path prefix at time t
-
         # Initialize beam search tree
         h = lambda y: self.get_score(x, y)
         bs = self.search_obj(self.b, h, y, self.alphabet)
@@ -420,15 +411,13 @@ class StructuredPerceptron:
                                 if node != present_target \
                                 and len(node) == len(present_target)]
 
-            #print()
-            #print(prefix)
-            #print(b_t)
-            #print(non_target_nodes)
-            best_non_target = max(non_target_nodes, \
-                key = lambda item: bs.score(item))
+            # Ff we only have non-target nodes in the beam, then we've
+            # gotta skip this b_t!
+            if len(non_target_nodes) == 0: continue
+
+            best_non_target = max(non_target_nodes, key = bs.score)
 
             # NOTE: Does sign matter here?
-            # TODO: Incorporate absolute value
             violation = abs(bs.score(present_target) - \
                 bs.score(best_non_target))
             best_prefix_pairs.append((present_target, best_non_target, \
@@ -438,12 +427,13 @@ class StructuredPerceptron:
             # one target node (for any particular tree) of some arbitrary
             # prefix length t
 
-        print("Best prefix pairs:")
-        print(best_prefix_pairs)
-
         # Return maximum in best_prefix_pairs w.r.t. violation
-        max_violating = max(best_prefix_pairs, key = lambda pair: pair[2])
-        print(max_violating)
+        # TODO: Address the more important question of why we have no
+        # best_prefix_pairs sometimes
+        no_max_violating = False
+        if len(best_prefix_pairs) == 0:
+            no_max_violating = True
+        else: max_violating = max(best_prefix_pairs, key = lambda pair: pair[2])
 
         # ----------------
 
@@ -464,12 +454,13 @@ class StructuredPerceptron:
             result_char = "-"
             mistake = 1
 
-            # Perform weight update with maximum violating prefix we've
-            # ever seen in the beam search
-            ideal_phi = self.phi(x, max_violating[0])
-            pred_phi = self.phi(x, max_violating[1])
-            self.w = np.add(self.w, np.dot(self.eta, \
-                (np.subtract(ideal_phi, pred_phi))))
+            if not no_max_violating:
+                # Perform weight update with maximum violating prefix we've
+                # ever seen in the beam search
+                ideal_phi = self.phi(x, max_violating[0])
+                pred_phi = self.phi(x, max_violating[1])
+                self.w = np.add(self.w, np.dot(self.eta, \
+                    (np.subtract(ideal_phi, pred_phi))))
 
         else:
             result_char = "+"
@@ -1032,7 +1023,7 @@ class BestFirstBeamSearch(BeamSearch):
         return True
 
 class BreadthFirstBeamSearch(BeamSearch):
-    def __init__(self):
+    def __init__(self, b, h, y, alphabet):
         super().__init__(b, h, y, alphabet)
 
     @overrides(BeamSearch)
@@ -1046,8 +1037,9 @@ class BreadthFirstBeamSearch(BeamSearch):
         # NOTE: Implicitly only keeping children of expanded parents, leaving
         # parents behind in the dust
         candidates = []
-        for y_partial in beam:
-            candidates += self.gen_children(self.y_partial)
+        for y_partial in self.beam:
+            candidates += self.gen_children(y_partial)
+        if len(self.beam) == 0: candidates = self.gen_children(self.beam) # init
 
         # [Prune] excess, lower-scoring nodes - maintain beam width
         random.shuffle(candidates)

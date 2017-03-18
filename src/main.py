@@ -77,9 +77,9 @@ def main():
     eta = [0.01][0]                     # Learning rate
     MAX = [50][0]                       # Maximum number of iterations
     phi_order = [2][0]                  # Joint-features: 1 = unary, etc.
-    b = [1, 5, 10, 15, 25, 50, 100][0]  # Beam width
+    bs = [1, 5, 10, 15, 25, 50, 100]    # Beam width
     search_types = [0, 1]               # Search type: Breadth-first or best-first
-    update_method = [0, 1, 2][0]        # Update method index
+    update_methods = [0, 1, 2]          # Update method index
     load_w = [True, False][1]           # Determines loading model weights
 
     # Raw training and testing data
@@ -89,41 +89,42 @@ def main():
 
     # First: Run on breadth-first and best-first
     for search_type in search_types[:]:
+        for update_method in update_methods[:]:
+            for b in bs[:]:
+                for raw_train, raw_test in raw_train_test[:]:
 
-        for raw_train, raw_test in raw_train_test[:]:
+                    # Let's time parsing, training, and testing
+                    start_time = time.clock()
 
-            # Let's time parsing, training, and testing
-            start_time = time.clock()
+                    print("Parsing training and testing data:")
+                    print("\t" + raw_train)
+                    print("\t" + raw_test)
 
-            print("Parsing training and testing data:")
-            print("\t" + raw_train)
-            print("\t" + raw_test)
+                    # Parse train & test data
+                    train, len_x, alphabet = parse_data_file(raw_train)
+                    test, *_ = parse_data_file(raw_test)
 
-            # Parse train & test data
-            train, len_x, alphabet = parse_data_file(raw_train)
-            test, *_ = parse_data_file(raw_test)
+                    # Initialize model with parameters
+                    sp = StructuredPerceptron(alphabet, len_x, phi_order,
+                        update_method, search_type, R, eta, MAX, b)
 
-            # Initialize model with parameters
-            sp = StructuredPerceptron(alphabet, len_x, phi_order, update_method, \
-                search_type, R, eta, MAX, b)
+                    # Train & test
+                    train_accuracy = sp.train(train)
+                    test_accuracy = sp.test(test)
 
-            # Train & test
-            train_accuracy = sp.train(train)
-            test_accuracy = sp.test(test)
-
-            # Collect and record stats
-            # NOTE: Format ([data ID], [train acc.], [test acc.], [elapsed time])
-            elapsed_time = (round(time.clock() - start_time) / 60)
-            report = (raw_train, train_accuracy, test_accuracy, elapsed_time)
-            stat_reports.append(report)
+                    # Collect and record stats
+                    # NOTE: Format ([data ID], [train accuracy], [test accuracy],
+                    # [elapsed time], [search type], [update method], [beam width])
+                    elapsed_time = (round(time.clock() - start_time) / 60)
+                    report = (raw_train, train_accuracy, test_accuracy,
+                        elapsed_time, search_type, update_method, b)
+                    stat_reports.append(report)
 
     # Print summary of results
     print()
     print("-" * 40)
+    print()
     for report in stat_reports:
-
-        # TODO: Automate this whole process using the parameter arrays above,
-        # and add more information to each report so I can do a once-over after!
 
         # Convert all data in report to a string!
         report = list(map(str, report))
@@ -131,6 +132,10 @@ def main():
         print(" | Train accuracy: " + report[1])
         print(" | Test accuracy: " + report[2])
         print(" | Elapsed time: " + report[3])
+        print(" | Search type: " + report[4])
+        print(" | Update method: " + report[5])
+        print(" | Beam width: " + report[6])
+        print()
 
     print("-" * 40)
     print()
