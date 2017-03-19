@@ -114,33 +114,16 @@ def main():
 
                     # Collect and record stats
                     # NOTE: Format ([data ID], [train accuracy], [test accuracy],
-                    # [elapsed time], [search type], [update method], [beam width])
+                    # [elapsed time], [search type], [update method],
+                    # [beam width], [end date-time])
                     elapsed_time = (round(time.clock() - start_time) / 60)
+                    end_datetime = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
                     report = (raw_train, train_accuracy, test_accuracy,
-                        elapsed_time, search_type, update_method, b)
+                        elapsed_time, search_type, update_method, b, end_datetime)
                     stat_reports.append(report)
 
-    # Print summary of results
-    print()
-    print("-" * 40)
-    print()
-    for report in stat_reports:
-
-        # Convert all data in report to a string!
-        report = list(map(str, report))
-        print("Model ID: " + report[0])
-        print(" | Train accuracy: " + report[1])
-        print(" | Test accuracy: " + report[2])
-        print(" | Elapsed time: " + report[3])
-        print(" | Search type: " + report[4])
-        print(" | Update method: " + report[5])
-        print(" | Beam width: " + report[6])
-        print()
-
-    print("-" * 40)
-    print()
-
-    return
+                    # Write report to file
+                    write_report(report)
 
 # Party = started
 main()

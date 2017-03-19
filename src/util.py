@@ -9,7 +9,27 @@ percpetron, but more to the maintainance and assistance of
 more basic computation in program
 """
 
-# A custom annotation to denote child overriding method of parent
+def write_report(report):
+    """
+    Append single report to report file as CSV, allowing for data to
+    be analyzed as a spreadsheet
+    """
+
+    # NOTE: We already know the exact contents of a report from main()
+    # Convert all data in report to a string!
+    report = list(map(str, report))
+    report_file = "out/reports/report.csv"
+    with open(report_file, "a") as f:
+
+        # Compile report as CSV
+        report_str = report[0] + "," + report[4] + "," + report[5] \
+            + "," + report[6] + "," + report[1] + "," + report[2] \
+            + "," + report[7] + "\n"
+
+        # Append to file
+        f.write(report_str)
+
+# Custom annotation to denote child overriding method of parent
 def overrides(interface_class):
     def overrider(method):
         assert(method.__name__ in dir(interface_class))

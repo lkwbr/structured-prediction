@@ -79,7 +79,6 @@ class StructuredPerceptron:
         self.display_header(D)
 
         # Record model's progress w.r.t. accuracy (and iteration improvment)
-        hamming_loss = 0
         it_improvement = np.zeros((len(D)))
         acc_progress = []
         #pw = pg.plot()
@@ -100,6 +99,7 @@ class StructuredPerceptron:
             train_num = 0
             num_mistakes = 0
             num_correct = 0
+            hamming_loss = 0
 
             # Go through training examples
             # TODO: Remove data restriction
