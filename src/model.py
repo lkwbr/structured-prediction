@@ -13,10 +13,6 @@ STRUCTURED PERCEPTRON
 Methods immediately relevant to the concept of a generalized perceptron
 """
 
-# TODO: Possibly fix our Hamming accuracy calculations, because under low training
-# examples, it will give us sub-zero accuracies. I don't like this.
-# TODO: Address max-violation abnormalities
-
 class StructuredPerceptron:
 
     # NOTE: Any variable declared outside of the constructor is a static

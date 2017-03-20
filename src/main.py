@@ -3,7 +3,7 @@
 # Luke Weber, 11398889
 # CptS 580, HW #2
 # Created 02/08/2017
-# Last edited 03/13/2017
+# Last edited 03/19/2017
 
 """
 Structured Perceptron, predicting structured outputs y_hat for
@@ -20,8 +20,8 @@ representations, such as:
     - Pairwise / First-order
     - Third-order
     - Fourth-order.
-These feature representations allow us to create
-different features for each structured input x and output y.
+These feature representations allow us to create different
+features for each structured input x and output y.
 """
 
 # Third-party libraries
