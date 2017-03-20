@@ -140,7 +140,7 @@ class StructuredPerceptron:
                 # NOTE: Uncommented plotting for efficiency
                 #pw.plot(acc_progress, clear = True)
                 #pg.QtGui.QApplication.processEvents()
-#
+                
             # Report iteration stats
             print()
             print("\t| Standard accuracy = " + str(accuracy * 100) + "%")

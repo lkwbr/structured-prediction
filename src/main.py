@@ -78,7 +78,7 @@ def main():
     MAX = [50][0]                       # Maximum number of iterations
     phi_order = [2][0]                  # Joint-features: 1 = unary, etc.
     bs = [1, 5, 10, 15, 25, 50, 100]    # Beam width
-    search_types = [0, 1]               # Search type: Breadth-first or best-first
+    search_types = [0, 1]               # Search type: Best-first or breadth-first
     update_methods = [0, 1, 2]          # Update method index
     load_w = [True, False][1]           # Determines loading model weights
 
@@ -88,7 +88,7 @@ def main():
     stat_reports = []
 
     # First: Run on breadth-first and best-first
-    for search_type in search_types[:]:
+    for search_type in search_types[1:]:
         for update_method in update_methods[:]:
             for b in bs[:]:
                 for raw_train, raw_test in raw_train_test[:]:
