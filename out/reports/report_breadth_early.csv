@@ -1,0 +1,3 @@
+Data Type, Beam Search Type, Update Method, Beam Width, Training Accuracy, Testing Accuracy, End Time
+data/nettalk\train.txt,1,1,1,0.6644289335664335,0.6066054014612843,2017-03-21 21:25:23
+data/ocr\train.txt,1,1,1,0.7908557452487164,0.581396914999537,2017-03-21 23:02:17

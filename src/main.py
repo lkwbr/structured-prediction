@@ -79,7 +79,7 @@ def main():
     phi_order = [2][0]                  # Joint-features: 1 = unary, etc.
     bs = [1, 5, 10, 15, 25, 50, 100]    # Beam width
     search_types = [0, 1]               # Search type: Best-first or breadth-first
-    update_methods = [0, 1, 2]          # Update method index
+    update_methods = [0, 1, 2]          # Updates: standard, early update, max-violation
     load_w = [True, False][1]           # Determines loading model weights
 
     # Raw training and testing data
@@ -89,7 +89,7 @@ def main():
 
     # First: Run on breadth-first and best-first
     for search_type in search_types[1:]:
-        for update_method in update_methods[:]:
+        for update_method in update_methods[1:2]:
             for b in bs[:]:
                 for raw_train, raw_test in raw_train_test[:]:
 

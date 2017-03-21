@@ -18,7 +18,7 @@ def write_report(report):
     # NOTE: We already know the exact contents of a report from main()
     # Convert all data in report to a string!
     report = list(map(str, report))
-    report_file = "out/reports/report_breadth.csv"
+    report_file = "out/reports/report_breadth_early.csv"
     with open(report_file, "a") as f:
 
         # Compile report as CSV
