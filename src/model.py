@@ -140,7 +140,7 @@ class StructuredPerceptron:
                 # NOTE: Uncommented plotting for efficiency
                 #pw.plot(acc_progress, clear = True)
                 #pg.QtGui.QApplication.processEvents()
-                
+
             # Report iteration stats
             print()
             print("\t| Standard accuracy = " + str(accuracy * 100) + "%")
@@ -839,6 +839,9 @@ class StructuredPerceptron:
         print()
         print("\tData length (with limitation) = " + str(len(D)))
         print("\tNumber of restarts = " + str(self.R))
+        print("\tUpdate method = " + str(self.update_method))
+        print("\tSearch object = " + str(self.search_obj))
+        print("\tBeam width = " + str(self.b))
         print("\tLearning rate = " + str(self.eta))
         print("\tMax iteration count = " + str(self.MAX))
         print("\tOrder of joint-features = " + str(self.phi_order))

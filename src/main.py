@@ -89,8 +89,8 @@ def main():
 
     # First: Run on breadth-first and best-first
     for search_type in search_types[1:]:
-        for update_method in update_methods[1:2]:
-            for b in bs[:]:
+        for update_method in update_methods[2:3]:
+            for b in bs[4:]:
                 for raw_train, raw_test in raw_train_test[:]:
 
                     # Let's time parsing, training, and testing
@@ -123,7 +123,7 @@ def main():
                     stat_reports.append(report)
 
                     # Write report to file
-                    write_report(report)
+                    write_report(report, "report_breadth_max")
 
 # Party = started
 main()
