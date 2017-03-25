@@ -52,9 +52,9 @@ sig = False             # See if a signal is already being handled
 weights = []
 weights_dir = "weights/"
 
-def main():
+def run(update_limit, b_limit, data_limit, report_name):
     """
-    Main: Driver function
+    Run: Training function
     Data: Handwritten words and text-to-speech
     Setup (for both handwriting and text-to-speech mapping) problems:
         0. Establish model parameters
@@ -89,9 +89,9 @@ def main():
 
     # First: Run on breadth-first and best-first
     for search_type in search_types[1:]:
-        for update_method in update_methods[2:3]:
-            for b in bs[4:]:
-                for raw_train, raw_test in raw_train_test[:]:
+        for update_method in update_methods[update_limit[0]:update_limit[1]]:
+            for b in bs[b_limit[0]:b_limit[1]]:
+                for raw_train, raw_test in raw_train_test[data_limit[0]:data_limit[1]]:
 
                     # Let's time parsing, training, and testing
                     start_time = time.clock()
@@ -123,7 +123,24 @@ def main():
                     stat_reports.append(report)
 
                     # Write report to file
-                    write_report(report, "report_breadth_max")
+                    write_report(report, report_name)
+
+def main():
+    """ Driver function """
+
+    # FIXUPS (from program crash)
+    # [1] Standard; beam = 50, 100; data = OCR
+    #run((0, 1), (5, 7), (1, 2), "report_breadth_standard")
+    # [2] Early; beam = 25; data = OCR
+    #run((1, 2), (4, 5), (1, 2), "report_breadth_early")
+    # [2] Max-violation; beam = 15, 25; data = OCR
+    #run((2, 3), (3, 5), (1, 2), "report_breadth_max")
+
+    # PROGRESS
+    # [3] Early; beam = 50, 100; data = Nettalk, OCR
+    run((1, 2), (5, 7), (0, 2), "report_breadth_early")
+    # [3] Max-violation; beam = 50, 100; data = Nettalk, OCR
+    run((2, 3), (5, 7), (0, 2), "report_breadth_max")
 
 # Party = started
 main()

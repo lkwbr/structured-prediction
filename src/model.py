@@ -51,6 +51,7 @@ class StructuredPerceptron:
         self.MAX = MAX                      # Maximum number of iterations
         self.w = None                       # Learned weight vector
         self.update_method = self.update_methods[update_method]
+        self.convergence_range = 1          # When considering [0, 100]
 
         # Phi-related
         self.phi = phi                      # Joint-feature function
@@ -77,6 +78,7 @@ class StructuredPerceptron:
         # Record model's progress w.r.t. accuracy (and iteration improvment)
         it_improvement = np.zeros((len(D)))
         acc_progress = []
+        ham_acc_progress = []
         #pw = pg.plot()
 
         # Reset weights of scoring function to 0; useful if we ever train
@@ -98,7 +100,6 @@ class StructuredPerceptron:
             hamming_loss = 0
 
             # Go through training examples
-            # TODO: Remove data restriction
             for x, y in D[:]:
 
                 # Skip empty data points
@@ -133,18 +134,29 @@ class StructuredPerceptron:
             accuracy = num_correct / num_examples
             hamming_accuracy = (1.0 - (hamming_loss / num_examples))
             acc_progress.append(accuracy)
+            ham_acc_progress.append(hamming_accuracy)
 
             # Plot accuracy timeline
-            if len(acc_progress) > 1:
-                pass
+            last_acc = 0
+            last_ham_acc = 0
+            if len(ham_acc_progress) > 1:
+                # Get accuracy from previous iteration
+                last_acc = acc_progress[-2]
+                last_ham_acc = ham_acc_progress[-2]
                 # NOTE: Uncommented plotting for efficiency
                 #pw.plot(acc_progress, clear = True)
                 #pg.QtGui.QApplication.processEvents()
 
+            # Accuracy improvement
+            acc_it_diff = accuracy - last_acc
+            ham_acc_it_diff = hamming_accuracy - last_ham_acc
+
             # Report iteration stats
             print()
-            print("\t| Standard accuracy = " + str(accuracy * 100) + "%")
-            print("\t| Hamming accuracy = " + str(hamming_accuracy * 100) + "%")
+            print("\t| Standard accuracy = " + str(accuracy * 100) + "%" \
+                  + "\t" + give_sign(acc_it_diff * 100))
+            print("\t| Hamming accuracy = " + str(hamming_accuracy * 100) + "%" \
+                  + "\t" + give_sign(ham_acc_it_diff * 100))
             print("\t| Number correct = " + str(num_correct))
             print("\t| Number of mistakes = " + str(num_mistakes))
             print("\t| Time = ~" + str(round((time.clock() - it_start) / 60))
@@ -153,7 +165,7 @@ class StructuredPerceptron:
 
             # Check for convergence
             if len(acc_progress) > 1:
-                if acc_progress[-1] == acc_progress[-2]:
+                if self.converged(ham_acc_it_diff):
                     print("Model has converged:")
                     print("\tAccuracy = " + str(accuracy * 100) + "%")
                     print("\tIteration = " + str(it))
@@ -748,6 +760,15 @@ class StructuredPerceptron:
         return vect
 
     # Class utility methods
+
+    def converged(self, diff):
+        """
+        Given difference between two numbers, determine if they are
+        within the convergence range
+        """
+        diff = int(diff * 100)
+        if diff <= self.convergence_range: return True
+        return False
 
     def get_score(self, x, y_hat):
         """
