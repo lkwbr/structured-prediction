@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 
 # Luke Weber, 11398889
-# CptS 580, HW #2
+# CptS 580, HW #3
 # Created 02/08/2017
-# Last edited 03/19/2017
+# Last modified 04/04/2017
+
+# TODO: Add description and link to LaSO paper with beam search
+# TODO: Add description and link to recurrent classification
+# TODO: Abstract out the plotter
+# TODO: Upgrade the damn readme.md
 
 """
 Structured Perceptron, predicting structured outputs y_hat for
@@ -19,7 +24,7 @@ representations, such as:
     - Unary
     - Pairwise / First-order
     - Third-order
-    - Fourth-order.
+    - Fourth-order
 These feature representations allow us to create different
 features for each structured input x and output y.
 """
@@ -36,7 +41,7 @@ import os
 
 # Custom classes and definitions
 from util import *
-from model import StructuredPerceptron
+from structured_perceptron import StructuredPerceptron
 
 # Running on Windows?
 if os.name != "posix":
