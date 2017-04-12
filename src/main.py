@@ -5,6 +5,8 @@
 # Created 02/08/2017
 # Last modified 04/04/2017
 
+# TODO: Abstract every model to type Model
+# TODO: Unify main.py for many different SP classifiers
 # TODO: Add description and link to LaSO paper with beam search
 # TODO: Add description and link to recurrent classification
 # TODO: Abstract out the plotter
@@ -41,7 +43,8 @@ import os
 
 # Custom classes and definitions
 from util import *
-from structured_perceptron import StructuredPerceptron
+from perceptron import StructuredPerceptron
+from recurrent import RecurrentClassifier
 
 # Running on Windows?
 if os.name != "posix":
@@ -57,7 +60,7 @@ sig = False             # See if a signal is already being handled
 weights = []
 weights_dir = "weights/"
 
-def run(update_limit, b_limit, data_limit, report_name):
+def run_sp(raw_train_test, update_limit, b_limit, data_limit, report_name):
     """
     Run: Training function
     Data: Handwritten words and text-to-speech
@@ -70,11 +73,7 @@ def run(update_limit, b_limit, data_limit, report_name):
         0. All data in form "000001010101010101..." "[label]"
     """
 
-    # Save weights on Ctrl-C
-    signal.signal(signal.SIGINT, signal_handler)
-
-    # Set non-truncated printing of numpy arrays
-    np.set_printoptions(threshold = np.inf)
+    stat_reports = []
 
     # Perceptron training params
     # NOTE: Tune these according to your preference
@@ -86,11 +85,6 @@ def run(update_limit, b_limit, data_limit, report_name):
     search_types = [0, 1]               # Search type: Best-first or breadth-first
     update_methods = [0, 1, 2]          # Updates: standard, early update, max-violation
     load_w = [True, False][1]           # Determines loading model weights
-
-    # Raw training and testing data
-    data_dir = "data/"
-    raw_train_test = get_data_files(data_dir)
-    stat_reports = []
 
     # First: Run on breadth-first and best-first
     for search_type in search_types[1:]:
@@ -130,8 +124,29 @@ def run(update_limit, b_limit, data_limit, report_name):
                     # Write report to file
                     write_report(report, report_name)
 
+def run_rc(raw_train_test):
+
+    for raw_train, raw_test in raw_train_test:
+
+        # Parse train & test data
+        print("Parsing training/testing data...", flush = True)
+        train, len_x, alphabet = parse_data_file(raw_train)
+        test, *_ = parse_data_file(raw_test)
+
+        # Construct
+        rc = RecurrentClassifier(alphabet, len_x)
+
+        h = rc.train(train)
+        test_hamm_accuracy = rc.test(test)
+
 def main():
     """ Driver function """
+
+    # Get our raw training and testing data
+    data_dir = "data/"
+    raw_train_test = get_data_files(data_dir)
+
+    run_rc(raw_train_test)
 
     # FIXUPS (from program crash)
     # [1] Standard; beam = 50, 100; data = OCR
@@ -143,9 +158,9 @@ def main():
 
     # PROGRESS
     # [3] Early; beam = 50, 100; data = Nettalk, OCR
-    run((1, 2), (5, 7), (0, 2), "report_breadth_early")
+    # run_sp((1, 2), (5, 7), (0, 2), "report_breadth_early")
     # [3] Max-violation; beam = 50, 100; data = Nettalk, OCR
-    run((2, 3), (5, 7), (0, 2), "report_breadth_max")
+    # run_sp((2, 3), (5, 7), (0, 2), "report_breadth_max")
 
 # Party = started
 main()

@@ -29,6 +29,22 @@ def write_report(report, filename):
         # Append to file
         f.write(report_str)
 
+def give_err_bars(alphabet, y, y_hat):
+    """ Show error bars above incorrect chars in y_hat """
+
+    # NOTE: Assuming all chars in alphabet are same length
+    char_len = len(list(alphabet)[0])
+
+    err_display = "\n"
+    err_display += ("\t\t\t" + " " + "".join(\
+          [("_" * char_len) if y_hat[i] != y[i] else (" " * char_len) \
+            for i in range(len(y))]) + " \n")
+    err_display += ("\t\t\t" + "'" + "".join(y_hat).upper() + "'\n")
+    err_display += ("\t\t\t" + "'" + "".join(y).upper() + "'" + "*\n")
+    err_display += ("\n")
+
+    return err_display
+
 # Custom annotation to denote child overriding method of parent
 def overrides(interface_class):
     def overrider(method):

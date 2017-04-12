@@ -5,6 +5,8 @@ BEAM SEARCH
 Home to implementations of Breadth-First and Best-First Beam Search
 """
 
+from util import *
+
 class BeamSearch:
     """ Parent class for basic beam search """
 

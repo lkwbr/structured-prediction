@@ -363,7 +363,7 @@ class StructuredPerceptron(Model):
         result_char = ""
 
         # Show real output and predicted output!
-        err_display = self.__give_err_bars(y, y_hat)
+        err_display = give_err_bars(self.alphabet, y, y_hat)
 
         if y_hat != y:
 
@@ -455,7 +455,7 @@ class StructuredPerceptron(Model):
         result_char = ""
 
         # Show real output and predicted output!
-        err_display = self.__give_err_bars(y, y_hat)
+        err_display = give_err_bars(self.alphabet, y, y_hat)
 
         # Do weight update upon prediction error
         if y_hat != y:
@@ -828,22 +828,6 @@ class StructuredPerceptron(Model):
     def __set_weights(self, w):
         """ Allow the outside to set our scoring function weights """
         self.w = w
-
-    def __give_err_bars(self, y, y_hat):
-        """ Show error bars above incorrect chars in y_hat """
-
-        # NOTE: Assuming all chars in alphabet are same length
-        char_len = len(list(self.alphabet)[0])
-
-        err_display = "\n"
-        err_display += ("\t\t\t" + " " + "".join(\
-              [("_" * char_len) if y_hat[i] != y[i] else (" " * char_len) \
-                for i in range(len(y))]) + " \n")
-        err_display += ("\t\t\t" + "'" + "".join(y_hat).upper() + "'\n")
-        err_display += ("\t\t\t" + "'" + "".join(y).upper() + "'" + "*\n")
-        err_display += ("\n")
-
-        return err_display
 
     def __display_header(self, D):
         print()
