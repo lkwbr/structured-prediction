@@ -11,19 +11,19 @@ class Model:
     def __init__(self, alphabet, len_x):
 
         # Structure-related
-        self.alphabet = alphabet
-        self.len_x = len_x
-        self.len_y = len(alphabet)
-        self.convergence_range = 1 # Considering accuracy range [0, 100]
+        self._alphabet = alphabet
+        self._len_x = len_x
+        self._len_y = len(alphabet)
+        self._convergence_range = 1 # Considering accuracy range [0, 100]
 
-    def train(self, D): raise NotImplementedError()
+    def train(self, D, *args): raise NotImplementedError()
     def test(self, D): raise NotImplementedError()
 
-    def __converged(self, diff):
+    def _converged(self, diff):
         """
         Given difference between two numbers, determine if they are
         within the convergence range
         """
         diff = int(diff * 100)
-        if diff <= self.convergence_range: return True
+        if diff <= self._convergence_range: return True
         return False

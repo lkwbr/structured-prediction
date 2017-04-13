@@ -2,19 +2,20 @@
 
 """
 RECURRENT CLASSIFIER
-xxx
+Reduction of strucutred prediction to multi-label classification; uses methods
+like Immitation Learning [1] and the DAgger algorithm [2]
+
+[1] http://proceedings.mlr.press/v24/vlachos12a/vlachos12a.pdf
+[2] https://www.ri.cmu.edu/pub_files/2011/4/Ross-AISTATS11-NoRegret.pdf
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import svm
+import random
 
 from util import *
 from model import Model
-
-class ImmitationClassifier(RecurrentClassifier):
-
-    __name__ = "ImmitationRecurrentClassifier"
 
 class RecurrentClassifier(Model):
     """
@@ -25,32 +26,22 @@ class RecurrentClassifier(Model):
 
     def __init__(self, alphabet, len_x):
 
-        # Handle dummy label
-        self.__dummy_label = "$"
-        alphabet.update(self.__dummy_label)
+        # NOTE: This alphabet update needs to happen before we do anything else,
+        # mainly because of len_y's dependency
+        self._dummy_label = "$"
+        alphabet.update(self._dummy_label)
 
         # Have parent do their thing
         super().__init__(alphabet, len_x)
 
         # L: Set of classification examples
-        self.__L = []
-        self.__classifier = svm.SVC(kernel = "linear")
-        self.__phi_pairs = []
+        self._L = []
+        self._classifier = svm.SVC(kernel = "linear")
+        self._phi_pairs = []
 
     @overrides(Model)
-    def train(self, D):
-
-        print("Generating examples...", flush = True)
-        self.__generate_examples(D)
-
-        # Train SVM on our generated examples
-        print("Training classifier...", flush = True)
-        X = [t[0] for t in self.__L]
-        Y = [t[1] for t in self.__L]
-        self.__classifier.fit(X, Y)
-
-        # NOTE: Attempted custom, point-by-point training with the library
-        # classifier; but, this gave worse accuracy
+    def train(self, D, *args):
+        raise NotImplementedError("Class method 'train' has not been implemented")
 
     @overrides(Model)
     def test(self, D):
@@ -66,21 +57,21 @@ class RecurrentClassifier(Model):
             y_construct = []
             for t in range(T):
 
-                if len(y_construct) == 0: y_current = [self.__dummy_label]
+                if len(y_construct) == 0: y_current = [self._dummy_label]
                 else: y_current = y_construct
 
                 # Partial output features
-                f = self.__phi(x, y_current)
+                f = self._phi(x, y_current)
 
                 # Predict
-                y_hat = self.__classifier.predict([f])[0]
+                y_hat = self._classifier.predict([f])[0]
                 y_construct.append(y_hat)
 
             # TODO: Compare Hamming accuracy here (recurrent error?)
             num_wrong_labels = list_diff(y, y_construct)
             hamming_loss += num_wrong_labels / len(y)
 
-            print(give_err_bars(self.alphabet, y, y_construct), flush = True)
+            print(give_err_bars(self._alphabet, y, y_construct), flush = True)
 
         hamming_accuracy = (1.0 - (hamming_loss / len(D)))
 
@@ -89,7 +80,9 @@ class RecurrentClassifier(Model):
 
         return hamming_accuracy
 
-    def __generate_examples(self, D):
+    # NOTE: Single underscore is used to prevent "name mangling", which will now
+    # allow inhereting classes to use this method as their own
+    def _generate_examples(self, D):
         """ Populate list of classification examples """
 
         # Through each training example
@@ -102,17 +95,15 @@ class RecurrentClassifier(Model):
 
                 y_t = y[t]
                 y_partial = y[:t]
-                if len(y_partial) == 0: y_partial = [self.__dummy_label]
-
-                #print(y_partial, y_t)
+                if t == 0: y_partial = [self._dummy_label]
 
                 # Generate features, package up, and append to list
-                f = self.__phi(x, y_partial)
+                f = self._phi(x, y_partial)
                 example = (f, y_t)
-                self.__L.append(example)
+                self._L.append(example)
 
     # TODO: Possibly extract out this __phi func to Model class
-    def __phi(self, x, y):
+    def _phi(self, x, y):
         """
         First-order joint-feature function, phi:
             0. (Unary) Do unary features
@@ -126,19 +117,19 @@ class RecurrentClassifier(Model):
         """
 
         # Initial setting of phi dimensions
-        self.__phi_pairwise_base_index = self.len_x * self.len_y
-        dimen = (self.len_x * self.len_y) + (self.len_y ** 2)
+        self._phi_pairwise_base_index = self._len_x * self._len_y
+        dimen = (self._len_x * self._len_y) + (self._len_y ** 2)
 
         features = np.zeros((dimen))
-        alpha_list = list(self.alphabet)
+        alpha_list = list(self._alphabet)
         alpha_list.sort()
 
         # (One-time) Generate pair-index object
-        if len(self.__phi_pairs) == 0:
+        if len(self._phi_pairs) == 0:
             for a in alpha_list:
                 for b in alpha_list:
                     p = a + b
-                    self.__phi_pairs.append(p)
+                    self._phi_pairs.append(p)
 
         # Unary features
         for i in range(len(y)):
@@ -159,10 +150,132 @@ class RecurrentClassifier(Model):
             a = y[i]
             b = y[i + 1]
             p = a + b
-            comb_index = self.__phi_pairs.index(p)
-            vect_index = self.__phi_pairwise_base_index + comb_index
+            comb_index = self._phi_pairs.index(p)
+            vect_index = self._phi_pairwise_base_index + comb_index
 
             # Update occurace of pair
             features[vect_index] += 1
 
         return features
+
+class ImitationClassifier(RecurrentClassifier):
+
+    __name__ = "ImitationRecurrentClassifier"
+
+    def __init__(self, alphabet, len_x):
+        super().__init__(alphabet, len_x)
+
+    @overrides(RecurrentClassifier)
+    def train(self, D, *args):
+
+        print("Generating examples...", flush = True)
+        self._generate_examples(D)
+
+        # Train SVM on our generated examples
+        print("Training classifier...", flush = True)
+        X = [t[0] for t in self._L]
+        Y = [t[1] for t in self._L]
+        self._classifier.fit(X, Y)
+
+        # NOTE: Attempted custom, point-by-point training with the library
+        # classifier; but, this gave worse accuracy
+
+class DAggerClassifier(RecurrentClassifier):
+
+    __name__ = "DAggerRecurrentClassifier"
+
+    def __init__(self, alphabet, len_x, beta):
+        super().__init__(alphabet, len_x)
+        self._beta = beta # Interpolation parameter
+        self.policy = None
+
+    class Policy:
+        __name__ = "AbstractPolicy"
+        def __init__(self, L): self._L = L
+        def action(self, f):
+            """
+            For the given feature input f, produce the right action (i.e. label)
+            """
+            raise NotImplementedError()
+
+    class LearnedPolicy(Policy):
+        __name__ = "LearnedPolicy"
+        def __init__(self, L):
+            super().__init__(L)
+            self._classifier = svm.SVC(kernel = "linear")
+            self.learn()
+        def action(self, f):
+            return self._classifier.predict([f])[0]
+        def learn(self, L = None):
+            # (Possibly redundantly) update example set
+            if L is not None: self._L = L
+            else: L = self._L
+            X = [t[0] for t in L]
+            Y = [t[1] for t in L]
+            self._classifier.fit(X, Y)
+
+    class OraclePolicy(Policy):
+        __name__ = "OraclePolicy"
+        def __init__(self, L): super().__init__(L)
+        def action(self, f):
+            for lf, label in self._L:
+                if np.array_equal(f, lf): return label
+
+    @overrides(RecurrentClassifier)
+    def train(self, D, *args):
+
+        # NOTE: Would likely be more efficient to store L as a dict
+
+        print("Generating examples...", flush = True)
+        self._generate_examples(D)
+
+        # Train SVM on our generated examples
+        print("Training classifier...", flush = True)
+
+        # Instantiate initial classifier
+        h_learned = self.LearnedPolicy(self._L)
+        h_oracle = self.OraclePolicy(self._L)
+
+        # Data aggregation iterations
+        d_max = args[0]
+        for j in range(d_max):
+
+            h_current = self._choose_policy(h_oracle, h_learned)
+            print(h_current.__name__, flush = True)
+            for x, y in D[:]:
+
+                # Iterated select partial outputs of y
+                T = len(y)
+                for t in range(T):
+
+                    # Generate features
+                    y_partial = y[:t]
+                    if t == 0: y_partial = [self._dummy_label]
+                    f = self._phi(x, y_partial)
+
+                    # Does current classifier match oracle classification?
+                    c_action = h_current.action(f)  # Predicted action
+                    o_action = h_oracle.action(f)   # Oracle action
+                    if c_action == o_action:
+
+                        # Add classification example (from oracle)
+                        # TODO: Describe why we do this! Don't we already have
+                        # this classification example in L?
+                        clf_example = (f, o_action)
+                        self._L.append(clf_example)
+
+            # Learn classifier from aggregate data
+            h_learned.learn(self._L)
+
+            # TODO: Store all iterations of classifiers
+
+        # TODO: Return best classifier h_hat_j on validation data
+
+    def _choose_policy(self, a, b):
+        """
+        Choose policy a with probability beta, and policy b with probability
+        (1 - beta)
+        """
+        choice_point = random.random()
+        if choice_point < self._beta: return a
+        return b

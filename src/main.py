@@ -44,7 +44,7 @@ import os
 # Custom classes and definitions
 from util import *
 from perceptron import StructuredPerceptron
-from recurrent import RecurrentClassifier
+from recurrent import ImitationClassifier, DAggerClassifier
 
 # Running on Windows?
 if os.name != "posix":
@@ -125,6 +125,7 @@ def run_sp(raw_train_test, update_limit, b_limit, data_limit, report_name):
                     write_report(report, report_name)
 
 def run_rc(raw_train_test):
+    """ Train and test our recurrent classifiers """
 
     for raw_train, raw_test in raw_train_test:
 
@@ -134,10 +135,14 @@ def run_rc(raw_train_test):
         test, *_ = parse_data_file(raw_test)
 
         # Construct
-        rc = RecurrentClassifier(alphabet, len_x)
+        #ic = ImitationClassifier(alphabet, len_x)
+        dc = DAggerClassifier(alphabet, len_x, beta = 0.5)
 
-        h = rc.train(train)
-        test_hamm_accuracy = rc.test(test)
+        # Train and test
+        #h_ic = ic.train(train)
+        h_dc = dc.train(train, 5)
+        #accuracy_ic = ic.test(test)
+        accuracy_dc = dc.test(test)
 
 def main():
     """ Driver function """
