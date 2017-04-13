@@ -127,7 +127,7 @@ def run_sp(raw_train_test, update_limit, b_limit, data_limit, report_name):
 def run_rc(raw_train_test):
     """ Train and test our recurrent classifiers """
 
-    for raw_train, raw_test in raw_train_test:
+    for raw_train, raw_test in raw_train_test[1:]:
 
         # Parse train & test data
         print("Parsing training/testing data...", flush = True)

@@ -3,10 +3,12 @@
 """
 RECURRENT CLASSIFIER
 Reduction of strucutred prediction to multi-label classification; uses methods
-like Immitation Learning [1] and the DAgger algorithm [2]
+like Immitation Learning [1] and the DAgger algorithm [2]; we use results from
+the paper Structured Prediction via Output Space Search [3] for comparison
 
 [1] http://proceedings.mlr.press/v24/vlachos12a/vlachos12a.pdf
 [2] https://www.ri.cmu.edu/pub_files/2011/4/Ross-AISTATS11-NoRegret.pdf
+[3] http://jmlr.org/papers/volume15/doppa14a/doppa14a.pdf
 """
 
 import numpy as np
@@ -36,8 +38,44 @@ class RecurrentClassifier(Model):
 
         # L: Set of classification examples
         self._L = []
-        self._classifier = svm.SVC(kernel = "linear")
+        self._policy = self.LearnedPolicy(self._L)
         self._phi_pairs = []
+
+    class Policy:
+        __name__ = "AbstractPolicy"
+        def __init__(self, L): self._L = L
+        def action(self, f):
+            """
+            For the given feature input f, produce the right action (i.e. label)
+            """
+            raise NotImplementedError()
+
+    class LearnedPolicy(Policy):
+
+        __name__ = "LearnedPolicy"
+
+        def __init__(self, L):
+            super().__init__(L)
+            self._classifier = svm.SVC(kernel = "linear")
+            if len(self._L) != 0: self.learn()
+
+        def action(self, f):
+            return self._classifier.predict([f])[0]
+
+        def learn(self, L = None):
+            # (Possibly redundantly) update example set
+            if L is not None: self._L = L
+            else: L = self._L
+            X = [t[0] for t in L]
+            Y = [t[1] for t in L]
+            self._classifier.fit(X, Y)
+
+    class OraclePolicy(Policy):
+        __name__ = "OraclePolicy"
+        def __init__(self, L): super().__init__(L)
+        def action(self, f):
+            for lf, label in self._L:
+                if np.array_equal(f, lf): return label
 
     @overrides(Model)
     def train(self, D, *args):
@@ -64,17 +102,16 @@ class RecurrentClassifier(Model):
                 f = self._phi(x, y_current)
 
                 # Predict
-                y_hat = self._classifier.predict([f])[0]
+                y_hat = self._policy.action(f)
                 y_construct.append(y_hat)
 
             # TODO: Compare Hamming accuracy here (recurrent error?)
             num_wrong_labels = list_diff(y, y_construct)
             hamming_loss += num_wrong_labels / len(y)
 
-            print(give_err_bars(self._alphabet, y, y_construct), flush = True)
+            #print(give_err_bars(self._alphabet, y, y_construct), flush = True)
 
         hamming_accuracy = (1.0 - (hamming_loss / len(D)))
-
         print("Done: Hamming accuracy is {}%".format(round(hamming_accuracy * 100)))
         print()
 
@@ -173,9 +210,7 @@ class ImitationClassifier(RecurrentClassifier):
 
         # Train SVM on our generated examples
         print("Training classifier...", flush = True)
-        X = [t[0] for t in self._L]
-        Y = [t[1] for t in self._L]
-        self._classifier.fit(X, Y)
+        self._policy.learn(self._L)
 
         # NOTE: Attempted custom, point-by-point training with the library
         # classifier; but, this gave worse accuracy
@@ -189,45 +224,19 @@ class DAggerClassifier(RecurrentClassifier):
         self._beta = beta # Interpolation parameter
         self.policy = None
 
-    class Policy:
-        __name__ = "AbstractPolicy"
-        def __init__(self, L): self._L = L
-        def action(self, f):
-            """
-            For the given feature input f, produce the right action (i.e. label)
-            """
-            raise NotImplementedError()
-
-    class LearnedPolicy(Policy):
-        __name__ = "LearnedPolicy"
-        def __init__(self, L):
-            super().__init__(L)
-            self._classifier = svm.SVC(kernel = "linear")
-            self.learn()
-        def action(self, f):
-            return self._classifier.predict([f])[0]
-        def learn(self, L = None):
-            # (Possibly redundantly) update example set
-            if L is not None: self._L = L
-            else: L = self._L
-            X = [t[0] for t in L]
-            Y = [t[1] for t in L]
-            self._classifier.fit(X, Y)
-
-    class OraclePolicy(Policy):
-        __name__ = "OraclePolicy"
-        def __init__(self, L): super().__init__(L)
-        def action(self, f):
-            for lf, label in self._L:
-                if np.array_equal(f, lf): return label
-
     @overrides(RecurrentClassifier)
     def train(self, D, *args):
 
         # NOTE: Would likely be more efficient to store L as a dict
 
+        # Splitup training and validation data, 75/25
+        # IDEA: Could shuffle D to ensure uniform distribution
+        v_split = int(0.75 * len(D))
+        train_data = D[:v_split]
+        validation_data = D[v_split:]
+
         print("Generating examples...", flush = True)
-        self._generate_examples(D)
+        self._generate_examples(train_data)
 
         # Train SVM on our generated examples
         print("Training classifier...", flush = True)
@@ -235,14 +244,15 @@ class DAggerClassifier(RecurrentClassifier):
         # Instantiate initial classifier
         h_learned = self.LearnedPolicy(self._L)
         h_oracle = self.OraclePolicy(self._L)
+        h_history = [] # History of learned classifiers through iterations
 
         # Data aggregation iterations
         d_max = args[0]
         for j in range(d_max):
 
             h_current = self._choose_policy(h_oracle, h_learned)
-            print(h_current.__name__, flush = True)
-            for x, y in D[:]:
+            print("\t", j + 1, d_max, h_current.__name__, flush = True)
+            for x, y in train_data[:]:
 
                 # Iterated select partial outputs of y
                 T = len(y)
@@ -264,12 +274,21 @@ class DAggerClassifier(RecurrentClassifier):
                         clf_example = (f, o_action)
                         self._L.append(clf_example)
 
-            # Learn classifier from aggregate data
-            h_learned.learn(self._L)
+            # Store history of all learned policies, as well as Learn a new
+            # classifier from aggregate data!
+            if h_current is not h_oracle: h_history.append(h_learned)
+            h_learned = self.LearnedPolicy(self._L)
 
-            # TODO: Store all iterations of classifiers
+        # Find best learned classifier based on validation data
+        h_best_tup = (None, -1)
+        for h in h_history:
+            self._policy = h
+            acc = self.test(validation_data)
+            if acc > h_best_tup[1]: h_best_tup = (h, acc)
 
-        # TODO: Return best classifier h_hat_j on validation data
+        # Set our policy to the max learned classifier
+        self._policy = h_best_tup[0]
+        return h_best_tup[0]
 
     def _choose_policy(self, a, b):
         """
