@@ -1,13 +1,47 @@
 # util.py
 
-import os
-
 """
 UTILITY FUNCTIONS
 Methods not directly relevant to the concept of the structured
 percpetron, but more to the maintainance and assistance of
 more basic computation in program
 """
+
+import os
+import sys
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+_stdout = None
+
+def send_email(email, epass, esubject, ebody):
+    """ Send an email """
+
+    fromaddr = "{}".format(email)
+    toaddr = "{}".format(email)
+    msg = MIMEMultipart()
+    msg['From'] = fromaddr
+    msg['To'] = toaddr
+    msg['Subject'] = esubject
+
+    body = ebody
+    msg.attach(MIMEText(body, 'plain'))
+
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login(fromaddr, "{}".format(epass))
+    text = msg.as_string()
+    server.sendmail(fromaddr, toaddr, text)
+    server.quit()
+
+def disable_stdout():
+    global _stdout
+    _stdout = sys.stdout
+    sys.stdout = open('out/tmp', 'w')
+
+def enable_stdout():
+    sys.stdout = _stdout
 
 def write_report(report, filename):
     """

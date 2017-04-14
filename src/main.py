@@ -127,22 +127,33 @@ def run_sp(raw_train_test, update_limit, b_limit, data_limit, report_name):
 def run_rc(raw_train_test):
     """ Train and test our recurrent classifiers """
 
-    for raw_train, raw_test in raw_train_test[1:]:
+    # Get email stuff at beginning
+    email = input("Email address: ")
+    password = input("Email password: ")
+
+    for raw_train, raw_test in raw_train_test[:]:
 
         # Parse train & test data
         print("Parsing training/testing data...", flush = True)
         train, len_x, alphabet = parse_data_file(raw_train)
         test, *_ = parse_data_file(raw_test)
 
-        # Construct
-        #ic = ImitationClassifier(alphabet, len_x)
-        dc = DAggerClassifier(alphabet, len_x, beta = 0.5)
+        # Construct list of classifiers
+        clfs = [ImitationClassifier(alphabet, len_x), \
+                DAggerClassifier(alphabet, len_x, beta = 0.5)]
 
-        # Train and test
-        #h_ic = ic.train(train)
-        h_dc = dc.train(train, 5)
-        #accuracy_ic = ic.test(test)
-        accuracy_dc = dc.test(test)
+        # Train and test every classifier
+        for c in clfs[:]:
+
+            ts = time.time()
+            h_c = c.train(train)
+            accuracy_c = c.test(test)
+
+            # Show time elapsed and send me an email update
+            print("{} minutes elapsed".format(round((time.time() - ts) / 60)))
+            send_email(email, password, "[CptS 580] {}".format(c.__name__), \
+                "{}".format(accuracy_c))
+            print("Email sent to {}\n".format(email))
 
 def main():
     """ Driver function """
