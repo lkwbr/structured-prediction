@@ -3,12 +3,10 @@
 # Luke Weber, 11398889
 # CptS 580, HW #3
 # Created 02/08/2017
-# Last modified 04/04/2017
+# Last modified 04/14/2017
 
-# TODO: Abstract every model to type Model
 # TODO: Unify main.py for many different SP classifiers
 # TODO: Add description and link to LaSO paper with beam search
-# TODO: Add description and link to recurrent classification
 # TODO: Abstract out the plotter
 # TODO: Upgrade the damn readme.md
 
@@ -43,6 +41,7 @@ import os
 
 # Custom classes and definitions
 from util import *
+from data import Data
 from perceptron import StructuredPerceptron
 from recurrent import ImitationClassifier, DAggerClassifier
 
@@ -60,6 +59,7 @@ sig = False             # See if a signal is already being handled
 weights = []
 weights_dir = "weights/"
 
+# TODO: Update this to new data object
 def run_sp(raw_train_test, update_limit, b_limit, data_limit, report_name):
     """
     Run: Training function
@@ -124,43 +124,38 @@ def run_sp(raw_train_test, update_limit, b_limit, data_limit, report_name):
                     # Write report to file
                     write_report(report, report_name)
 
-def run_rc(raw_train_test):
+def run_rc(raw_train_test, data):
     """ Train and test our recurrent classifiers """
 
     # Get email stuff at beginning
     email = input("Email address: ")
     password = input("Email password: ")
 
-    for raw_train, raw_test in raw_train_test[:]:
-
-        # Parse train & test data
-        print("Parsing training/testing data...", flush = True)
-        train, len_x, alphabet = parse_data_file(raw_train)
-        test, *_ = parse_data_file(raw_test)
+    for dset in data.parsed[:]
 
         # Construct list of classifiers
-        clfs = [ImitationClassifier(alphabet, len_x), \
-                DAggerClassifier(alphabet, len_x, beta = 0.5)]
+        clfs = [ImitationClassifier(dset.alphabet, dset.len_x), \
+                DAggerClassifier(dset.alphabet, dset.len_x, beta = 0.5)]
 
         # Train and test every classifier
         for c in clfs[:]:
 
+            print("Dataset = {}".format(dset.__name__))
+
             ts = time.time()
-            h_c = c.train(train)
-            accuracy_c = c.test(test)
+            h_c = c.train(dset.train)
+            accuracy_c = c.test(dset.test)
 
             # Show time elapsed and send me an email update
             print("{} minutes elapsed".format(round((time.time() - ts) / 60)))
-            send_email(email, password, "[CptS 580] {}".format(c.__name__), \
-                "{}".format(accuracy_c))
+            send_email(email, password, "[CptS 580] {} on {}".format( \
+                c.__name__, dset.__name__), "{}".format(accuracy_c))
             print("Email sent to {}\n".format(email))
 
 def main():
     """ Driver function """
 
-    # Get our raw training and testing data
-    data_dir = "data/"
-    raw_train_test = get_data_files(data_dir)
+    data = Data(data_dir = "data/")
 
     run_rc(raw_train_test)
 
