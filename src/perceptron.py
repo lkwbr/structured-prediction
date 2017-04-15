@@ -16,6 +16,9 @@ STRUCTURED PERCEPTRON
 Methods immediately relevant to the concept of a generalized perceptron
 """
 
+# TODO: Adapt StructuredPerceptron to Model changes made while developing
+# RecurrentClassifier (and all its children)
+
 class StructuredPerceptron(Model):
 
     # NOTE: Any variable declared outside of the constructor is a static
@@ -27,14 +30,9 @@ class StructuredPerceptron(Model):
     def __init__(self, alphabet, len_x, phi_order, update_method, search_type, \
         R, eta, MAX, b):
 
-        super().__init__(alphabet, len_x)
+        super().__init__(alphabet, len_x, phi_order)
 
         # Candy shop - so many choices!
-        self.__phi_funcs = [ \
-            self.__phi_unary, \
-            self.__phi_pairwise, \
-            self.__phi_third_order, \
-            self.__phi_fourth_order]
         self.__update_methods = [ \
             self.__standard_update, \
             self.__early_update, \
@@ -49,17 +47,6 @@ class StructuredPerceptron(Model):
         self.MAX = MAX                      # Maximum number of iterations
         self.w = None                       # Learned weight vector
         self.update_method = self.__update_methods[update_method]
-
-        # Phi: joint-feature function
-        self.phi_order = phi_order
-        self.phi = self.__phi_funcs[self.phi_order - 1]
-        self.phi_dimen = -1                 # Dimensionality of phi
-        self.__pairwise_base_index = -1
-        self.__triplet_base_index = -1
-        self.__quadruplet_base_index = -1
-        self.__pairs = []
-        self.__triplets = []
-        self.__quadruplets = []
 
         # Beam search related
         self.b = b
@@ -502,262 +489,6 @@ class StructuredPerceptron(Model):
                 y_hat = y_max
 
         return y_hat
-
-    # Phi methods
-
-    def __phi_unary(self, x, y):
-        """
-        Unary joint-feature function: sums together feature vectors of
-        similar labels, and combines features for different labels in different
-        indices
-        """
-
-        dimen = self.len_x * self.len_y
-        vect = np.zeros((dimen))
-
-        # NOTE: Changed from len(x) to len(y) to account for partial outputs
-        # of y; now we skill unlabelled x_i (character) vectors within the
-        # larger x (word) vector
-        for i in range(len(y)):
-
-            x_i = x[i]
-            y_i = y[i]
-
-            # Sorting keeps consistency of indices with respect to
-            # all prior and following phi(x, y) vectors
-            alpha_list = list(self.alphabet)
-            alpha_list.sort()
-            index = alpha_list.index(y_i)
-            x_vect = np.array(x_i)
-
-            # Manual insertion of x into standard vector
-            # NOTE: Holy fuck, had "= x_vect[j]" before, not "+="
-            y_target = len(x_i) * index
-            for j in range(len(x_i)): vect[j + y_target] += x_vect[j]
-
-        return vect
-
-    def __phi_pairwise(self, x, y):
-        """
-        Pairwise joint-feature function:
-            0. Do unary features
-            1. Capture all two-char permutations
-            2. Assign these permuations consistent indices
-            3. Count frequencies of each permuation and update vector
-               at that index
-        """
-
-        # Initial setting of phi dimensions
-        self.__pairwise_base_index = self.len_x * self.len_y
-        dimen = (self.len_x * self.len_y) + (self.len_y ** 2)
-
-        vect = np.zeros((dimen))
-        alpha_list = list(self.alphabet)
-        alpha_list.sort()
-
-        # (One-time) Generate pair-index object
-        if len(self.__pairs) == 0:
-            for a in alpha_list:
-                for b in alpha_list:
-                    p = a + b
-                    self.__pairs.append(p)
-
-        # Unary features
-        for i in range(len(y)):
-
-            x_i = x[i]
-            y_i = y[i]
-
-            # Unary features
-            index = alpha_list.index(y_i)
-            x_vect = np.array(x_i)
-            y_target = len(x_i) * index
-            for j in range(len(x_i)): vect[j + y_target] += x_vect[j]
-
-        # Pairwise features
-        for i in range(len(y) - 1):
-
-            # Get pair index
-            a = y[i]
-            b = y[i + 1]
-            p = a + b
-            comb_index = self.__pairs.index(p)
-            vect_index = self.__pairwise_base_index + comb_index
-
-            # Update occurace of pair
-            vect[vect_index] += 1
-
-        return vect
-
-    def __phi_third_order(self, x, y):
-        """
-        Third-order joint-feature function:
-            0. Do unary features
-            1. Do pairwise features
-            2. Capture all three-char permutations
-            3. Assign these permuations consistent indices
-            4. Count frequencies of each permuation and update vector
-               at that index
-        """
-
-        # Initial setting of phi dimensions
-        self.__pairwise_base_index = self.len_x * self.len_y
-        self.__triplet_base_index = self.__pairwise_base_index + (self.len_y ** 2)
-        dimen = self.__triplet_base_index + (self.len_y ** 3)
-
-        vect = np.zeros((dimen))
-        alpha_list = list(self.alphabet)
-        alpha_list.sort()
-
-        # (One-time) Generate pair and triplet lists
-        if len(self.__triplets) == 0:
-            for a in alpha_list:
-                for b in alpha_list:
-                    # Grab pair
-                    p = a + b
-                    self.__pairs.append(p)
-
-                    for c in alpha_list:
-                        # Grab triplet
-                        t = a + b + c
-                        self.__triplets.append(t)
-
-        # Unary features
-        for i in range(len(y)):
-
-            x_i = x[i]
-            y_i = y[i]
-
-            # Unary features
-            index = alpha_list.index(y_i)
-            x_vect = np.array(x_i)
-            y_target = len(x_i) * index
-            for j in range(len(x_i)): vect[j + y_target] += x_vect[j]
-
-        # Pairwise features
-        for i in range(len(y) - 1):
-
-            # Get pair index
-            a = y[i]
-            b = y[i + 1]
-            p = a + b
-            comb_index = self.__pairs.index(p)
-            vect_index = self.__pairwise_base_index + comb_index
-
-            # Update occurace of pair
-            vect[vect_index] += 1
-
-        # Third-order features
-        for i in range(len(y) - 2):
-
-            # Get pair index
-            a = y[i]
-            b = y[i + 1]
-            c = y[i + 2]
-            t = a + b + c
-            comb_index = self.__triplets.index(t)
-            vect_index = self.__triplet_base_index + comb_index
-
-            # Update occurace of triplet
-            vect[vect_index] += 1
-
-        return vect
-
-    def __phi_fourth_order(self, x, y):
-        """
-        Fourth-order joint-feature function:
-            0. Do unary features
-            1. Do pairwise features
-            2. Do third-order features
-            3. Capture all four-char permutations
-            4. Assign these permuations consistent indices
-            5. Count frequencies of each permuation and update vector
-               at that index
-        """
-
-        # Initial setting of phi dimensions
-        self.__pairwise_base_index = self.len_x * self.len_y
-        self.__triplet_base_index = self.__pairwise_base_index + (self.len_y ** 2)
-        self.__quadruplet_base_index = self.__triplet_base_index + (self.len_y ** 3)
-        dimen = self.__quadruplet_base_index + (self.len_y ** 4)
-
-        vect = np.zeros((dimen))
-        alpha_list = list(self.alphabet)
-        alpha_list.sort()
-
-        # (One-time) Generate pair, triplet, and quadruplet lists
-        if len(self.__quadruplets) == 0:
-            for a in alpha_list:
-                for b in alpha_list:
-                    # Grab pair
-                    p = a + b
-                    self.__pairs.append(p)
-
-                    for c in alpha_list:
-                        # Grab triplet
-                        t = a + b + c
-                        self.__triplets.append(t)
-
-                        for d in alpha_list:
-                            # Grab quadruplet
-                            q = a + b + c + d
-                            self.__quadruplets.append(q)
-
-        # Unary features
-        for i in range(len(y)):
-
-            x_i = x[i]
-            y_i = y[i]
-
-            # Unary features
-            index = alpha_list.index(y_i)
-            x_vect = np.array(x_i)
-            y_target = len(x_i) * index
-            for j in range(len(x_i)): vect[j + y_target] += x_vect[j]
-
-        # Pairwise features
-        for i in range(len(y) - 1):
-
-            # Get pair index
-            a = y[i]
-            b = y[i + 1]
-            p = a + b
-            comb_index = self.__pairs.index(p)
-            vect_index = self.__pairwise_base_index + comb_index
-
-            # Update occurace of pair
-            vect[vect_index] += 1
-
-        # Third-order features
-        for i in range(len(y) - 2):
-
-            # Get pair index
-            a = y[i]
-            b = y[i + 1]
-            c = y[i + 2]
-            t = a + b + c
-            comb_index = self.__triplets.index(t)
-            vect_index = self.__triplet_base_index + comb_index
-
-            # Update occurace of triplet
-            vect[vect_index] += 1
-
-        # Fourth-order features
-        for i in range(len(y) - 3):
-
-            # Get pair index
-            a = y[i]
-            b = y[i + 1]
-            c = y[i + 2]
-            d = y[i + 3]
-            q = a + b + c + d
-            comb_index = self.__quadruplets.index(q)
-            vect_index = self.__quadruplet_base_index + comb_index
-
-            # Update occurace of quadruplet
-            vect[vect_index] += 1
-
-        return vect
 
     # Class utility methods
 

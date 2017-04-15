@@ -27,7 +27,7 @@ class RecurrentClassifier(Model):
 
     __name__ = "RecurrentClassifier"
 
-    def __init__(self, alphabet, len_x):
+    def __init__(self, alphabet, len_x, phi_order = 1):
 
         # NOTE: This alphabet update needs to happen before we do anything else,
         # mainly because of len_y's dependency
@@ -35,24 +35,36 @@ class RecurrentClassifier(Model):
         alphabet.update(self._dummy_label)
 
         # Have parent do their thing
-        super().__init__(alphabet, len_x)
+        super().__init__(alphabet, len_x, phi_order)
 
         # L: Set of classification examples
         self._L = []
         self._policy = self.LearnedPolicy(self._L)
-        self._phi_pairs = []
 
     class Policy:
+
         __name__ = "AbstractPolicy"
+
         def __init__(self, L):
             """ Shuffle and keep given classification examples """
             self._L = L
             random.shuffle(self._L)
+
         def action(self, f):
             """
             For the given feature input f, produce the right action (i.e. label)
             """
-            raise NotImplementedError()
+            raise NotImplementedError("No 'action' specified")
+
+        def score(self, L = None):
+            """ Returns training accuracy in [0, 1] """
+            raise NotImplementedError("No 'score' function specified")
+
+        def decomp(self):
+            """ Decompose classification set L """
+            X = [t[0] for t in self._L]
+            Y = [t[1] for t in self._L]
+            return X, Y
 
     class LearnedPolicy(Policy):
 
@@ -60,29 +72,45 @@ class RecurrentClassifier(Model):
 
         def __init__(self, L):
             super().__init__(L)
-            self._classifier = svm.SVC(kernel = "linear")
-            if len(self._L) != 0: self.learn()
+            # NOTE: Gamma is the amount each training example affects the model
+            self._classifier = svm.SVC(kernel = "linear", gamma = 2)
+            if len(self._L) > 0: self.learn()
 
+        #@overrides(RecurrentClassifier.Policy)
         def action(self, f, y_star = None):
             return self._classifier.predict([f])[0]
 
+        #@overrides(RecurrentClassifier.Policy)
+        def score(self, L = None):
+            if self._L is None: raise Exception("Policy's classifier untrained")
+            if L is None: L = self._L
+            X, Y = self.decomp()
+            return self._classifier.score(X, Y)
+
         def learn(self, L = None):
+            """ Learn classifier based on classification set L """
             # (Possibly redundantly) update example set
             if L is not None: self._L = L
             else: L = self._L
-            X = [t[0] for t in L]
-            Y = [t[1] for t in L]
+            X, Y = self.decomp()
             self._classifier.fit(X, Y)
 
     class OraclePolicy(Policy):
+
         __name__ = "OraclePolicy"
+
         def __init__(self, L): super().__init__(L)
+
+        #@overrides(RecurrentClassifier.Policy)
         def action(self, f, y_star = None):
             # Overrides finding the label on our own
             if y_star is not None: return y_star
             for lf, label in self._L:
                 if np.array_equal(f, lf): return label
             return None
+
+        #@overrides(RecurrentClassifier.Policy)
+        def score(self, L = None): return 1
 
     @overrides(Model)
     def train(self, D, *args):
@@ -136,6 +164,9 @@ class RecurrentClassifier(Model):
             recurrent_hamming_loss += recurrent_num_wrong_labels / len(y)
             oracle_hamming_loss += oracle_num_wrong_labels / len(y)
 
+            # Present errors
+            print(give_err_bars(self._alphabet, y, y_partial_construct), flush = True)
+
         # Compute and report accuracies
         recurrent_hamming_accuracy = (1.0 - (recurrent_hamming_loss / len(D)))
         oracle_hamming_accuracy = (1.0 - (oracle_hamming_loss / len(D)))
@@ -149,8 +180,14 @@ class RecurrentClassifier(Model):
     def _generate_examples(self, D):
         """ Populate list of classification examples given by "expert" """
 
+        seen_set = set()
+
         # Through each training example
         for x, y in D[:]:
+
+            # TODO: See if this helps overfitting
+            #if "".join(y) in seen_set: continue
+            seen_set.add("".join(y))
 
             # Add training example for each left-anchored subset of the
             # structured output y; (left-anchored subsets: "h", "he", "hey")
@@ -161,6 +198,8 @@ class RecurrentClassifier(Model):
                 y_partial = y[:t]
                 if t == 0: y_partial = [self._dummy_label]
 
+                #print("".join(y_partial), y_t)
+
                 # Generate features, package up, and append to list
                 f = self._phi(x, y_partial)
                 example = (f, y_t)
@@ -168,62 +207,6 @@ class RecurrentClassifier(Model):
 
         # TODO: See if shuffling helps (done in other places too)
         random.shuffle(self._L)
-
-    # TODO: Possibly extract out this _phi func to Model class
-    def _phi(self, x, y):
-        """
-        First-order joint-feature function, phi:
-            0. (Unary) Do unary features
-            1. (Pairwise) Capture all two-char permutations
-            2. Assign these permuations consistent indices
-            3. Count frequencies of each permuation and update vector
-               at that index
-
-        Supports generating features for partially labelled outputs, i.e.,
-        for situations where len(y) <= len(x)
-        """
-
-        # Initial setting of phi dimensions
-        self._phi_pairwise_base_index = self._len_x * self._len_y
-        dimen = (self._len_x * self._len_y) + (self._len_y ** 2)
-
-        features = np.zeros((dimen))
-        alpha_list = list(self._alphabet)
-        alpha_list.sort()
-
-        # (One-time) Generate pair-index object
-        if len(self._phi_pairs) == 0:
-            for a in alpha_list:
-                for b in alpha_list:
-                    p = a + b
-                    self._phi_pairs.append(p)
-
-        # Unary features
-        for i in range(len(y)):
-
-            x_i = x[i]
-            y_i = y[i]
-
-            # Unary features
-            index = alpha_list.index(y_i)
-            x_vect = np.array(x_i)
-            y_target = len(x_i) * index
-            for j in range(len(x_i)): features[j + y_target] += x_vect[j]
-
-        # Pairwise features
-        for i in range(len(y) - 1):
-
-            # Get pair index
-            a = y[i]
-            b = y[i + 1]
-            p = a + b
-            comb_index = self._phi_pairs.index(p)
-            vect_index = self._phi_pairwise_base_index + comb_index
-
-            # Update occurace of pair
-            features[vect_index] += 1
-
-        return features
 
 class ImitationClassifier(RecurrentClassifier):
 
@@ -235,15 +218,34 @@ class ImitationClassifier(RecurrentClassifier):
     @overrides(RecurrentClassifier)
     def train(self, D, *args):
 
+        # TODO: Investigate OCR overfitting
+
         print("Generating examples...", flush = True)
         self._generate_examples(D)
+
+        # NOTE: Attempted custom, point-by-point training with the library
+        # classifier; but, this gave worse accuracy
 
         # Train SVM on our generated examples
         print("Training classifier...", flush = True)
         self._policy.learn(self._L)
 
-        # NOTE: Attempted custom, point-by-point training with the library
-        # classifier; but, this gave worse accuracy
+        # TODO: Remove
+        # Getting 100% accuracy here
+        num_tot = 0
+        num_right = 0
+        for u, v in self._L:
+            w = self._policy.action(u)
+            print(v, w)
+            if v == w: num_right += 1
+            num_tot += 1
+        print("{}/{} = {}".format(num_right, num_tot, round((num_right / num_tot), 2)))
+
+        # Training accuracy
+        oracle_hamming_accuracy = self._policy.score()
+        print("Done: Oracle (Hamming) accuracy is {}%\n".format( \
+            round(oracle_hamming_accuracy * 100)))
+        return oracle_hamming_accuracy
 
 class DAggerClassifier(RecurrentClassifier):
     """
@@ -355,7 +357,12 @@ class DAggerClassifier(RecurrentClassifier):
 
         # Set our policy to the max learned classifier
         self._policy = h_best_tup[0]
-        return h_best_tup[0]
+
+        # Training accuracy
+        oracle_hamming_accuracy = self._policy.score()
+        print("Done: Oracle (Hamming) accuracy is {}%\n".format( \
+            round(oracle_hamming_accuracy * 100)))
+        return oracle_hamming_accuracy
 
     def _choose_policy(self, a, b):
         """

@@ -1,11 +1,16 @@
 # data.py
 
+import os
+
+from util import *
+
 class Data:
     """
-    Collects and parses training and testing sets from directory hierarchy 
+    Collects and parses training and testing sets from the given directory hierarchy
     """
 
     class Set:
+        """ Represents individual train/test set, like NETTALK STRESS or OCR """
         def __init__(self, name, train, test, alphabet, len_x):
             self.__name__ = name
             self.train = train      # Training set
@@ -20,7 +25,7 @@ class Data:
         print("Grabbing data from {}...".format(self._data_dir), flush = True)
         self._data_files = Data.get_files(self._data_dir)
 
-        # Parse train & test data
+        # Parse each data set
         print("Parsing training/testing data...", flush = True)
         self.parsed = []
         for raw_train, raw_test in self._data_files:
@@ -28,6 +33,8 @@ class Data:
             test, *_ = Data.parse_file(raw_test)
             parsed_set = self.Set(raw_test, train, test, alphabet, len_x)
             self.parsed.append(parsed_set)
+
+            print("\t", parsed_set.__name__)
 
     @staticmethod
     def get_files(data_dir):
@@ -42,7 +49,7 @@ class Data:
 
             # Recurse on subdirectories
             for subdir in subdirs:
-                data_files + get_data_files(subdir)
+                data_files + Data.get_files(subdir)
 
             # Collect (train.txt. test.txt)
             train_test_pair = []

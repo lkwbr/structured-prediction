@@ -75,7 +75,6 @@ def give_err_bars(alphabet, y, y_hat):
             for i in range(len(y))]) + " \n")
     err_display += ("\t\t\t" + "'" + "".join(y_hat).upper() + "'\n")
     err_display += ("\t\t\t" + "'" + "".join(y).upper() + "'" + "*\n")
-    err_display += ("\n")
 
     return err_display
 

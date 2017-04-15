@@ -1,12 +1,16 @@
 Testing classifier...
-Done: Oracle (Hamming) accuracy is 80%
+Done: Oracle (Hamming) accuracy is 79%
 Done: Recurrent (Hamming) accuracy is 74%
 
 Testing classifier...
-Done: Oracle (Hamming) accuracy is 78%
+Done: Oracle (Hamming) accuracy is 77%
 Done: Recurrent (Hamming) accuracy is 73%
 
 Testing classifier...
-Done: Oracle (Hamming) accuracy is 73%
-Done: Recurrent (Hamming) accuracy is 71%
+Done: Oracle (Hamming) accuracy is 74%
+Done: Recurrent (Hamming) accuracy is 72%
+
+Testing classifier...
+Done: Oracle (Hamming) accuracy is 63%
+Done: Recurrent (Hamming) accuracy is 73%
 

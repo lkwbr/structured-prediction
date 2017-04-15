@@ -124,54 +124,49 @@ def run_sp(raw_train_test, update_limit, b_limit, data_limit, report_name):
                     # Write report to file
                     write_report(report, report_name)
 
-def run_rc(raw_train_test, data):
+def run_rc(data):
     """ Train and test our recurrent classifiers """
 
     # Get email stuff at beginning
-    email = input("Email address: ")
-    password = input("Email password: ")
+    #email = input("Email address: ")
+    #password = input("Email password: ")
 
-    for dset in data.parsed[:]
+    for dset in data.parsed[1:]:
 
         # Construct list of classifiers
         clfs = [ImitationClassifier(dset.alphabet, dset.len_x), \
                 DAggerClassifier(dset.alphabet, dset.len_x, beta = 0.5)]
 
-        # Train and test every classifier
-        for c in clfs[:]:
+        # Run through each classifier
+        for c in clfs[:1]:
 
             print("Dataset = {}".format(dset.__name__))
 
+            # Train and test
             ts = time.time()
-            h_c = c.train(dset.train)
-            accuracy_c = c.test(dset.test)
+            train_acc = c.train(dset.train)
+            test_acc = c.test(dset.test)
 
-            # Show time elapsed and send me an email update
-            print("{} minutes elapsed".format(round((time.time() - ts) / 60)))
-            send_email(email, password, "[CptS 580] {} on {}".format( \
-                c.__name__, dset.__name__), "{}".format(accuracy_c))
-            print("Email sent to {}\n".format(email))
+            # Show time elapsed
+            time_elapsed = round(((time.time() - ts) / 60), 2) # minutes
+            print("{} minutes elapsed".format(time_elapsed))
+
+            # Send me an email update
+            subject = "[CptS 580] {} on {}".format(c.__name__, dset.__name__)
+            body = "train = {}%\ntest = {}%\ntime = {} min".format(\
+                round(train_acc * 100, 2), round(test_acc * 100, 2), time_elapsed)
+
+            #send_email(email, password, subject, body)
+            #print("Email sent to {}\n".format(email))
 
 def main():
     """ Driver function """
 
+    # Parse training and testing data
     data = Data(data_dir = "data/")
 
-    run_rc(raw_train_test)
-
-    # FIXUPS (from program crash)
-    # [1] Standard; beam = 50, 100; data = OCR
-    #run((0, 1), (5, 7), (1, 2), "report_breadth_standard")
-    # [2] Early; beam = 25; data = OCR
-    #run((1, 2), (4, 5), (1, 2), "report_breadth_early")
-    # [2] Max-violation; beam = 15, 25; data = OCR
-    #run((2, 3), (3, 5), (1, 2), "report_breadth_max")
-
-    # PROGRESS
-    # [3] Early; beam = 50, 100; data = Nettalk, OCR
-    # run_sp((1, 2), (5, 7), (0, 2), "report_breadth_early")
-    # [3] Max-violation; beam = 50, 100; data = Nettalk, OCR
-    # run_sp((2, 3), (5, 7), (0, 2), "report_breadth_max")
+    # Run recurrent classifier
+    run_rc(data)
 
 # Party = started
 main()
