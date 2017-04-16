@@ -27,12 +27,7 @@ class RecurrentClassifier(Model):
 
     __name__ = "RecurrentClassifier"
 
-    def __init__(self, alphabet, len_x, phi_order = 1):
-
-        # NOTE: This alphabet update needs to happen before we do anything else,
-        # mainly because of len_y's dependency
-        self._dummy_label = "$"
-        alphabet.update(self._dummy_label)
+    def __init__(self, alphabet, len_x, phi_order = 2):
 
         # Have parent do their thing
         super().__init__(alphabet, len_x, phi_order)
@@ -165,7 +160,7 @@ class RecurrentClassifier(Model):
             oracle_hamming_loss += oracle_num_wrong_labels / len(y)
 
             # Present errors
-            print(give_err_bars(self._alphabet, y, y_partial_construct), flush = True)
+            #print(give_err_bars(self._alphabet, y, y_partial_construct), flush = True)
 
         # Compute and report accuracies
         recurrent_hamming_accuracy = (1.0 - (recurrent_hamming_loss / len(D)))
@@ -198,7 +193,7 @@ class RecurrentClassifier(Model):
                 y_partial = y[:t]
                 if t == 0: y_partial = [self._dummy_label]
 
-                #print("".join(y_partial), y_t)
+                #print("".join(y_partial), y_t, flush = True)
 
                 # Generate features, package up, and append to list
                 f = self._phi(x, y_partial)
@@ -229,17 +224,6 @@ class ImitationClassifier(RecurrentClassifier):
         # Train SVM on our generated examples
         print("Training classifier...", flush = True)
         self._policy.learn(self._L)
-
-        # TODO: Remove
-        # Getting 100% accuracy here
-        num_tot = 0
-        num_right = 0
-        for u, v in self._L:
-            w = self._policy.action(u)
-            print(v, w)
-            if v == w: num_right += 1
-            num_tot += 1
-        print("{}/{} = {}".format(num_right, num_tot, round((num_right / num_tot), 2)))
 
         # Training accuracy
         oracle_hamming_accuracy = self._policy.score()
@@ -276,7 +260,9 @@ class DAggerClassifier(RecurrentClassifier):
         else: d_max = self._default_it
 
         # Splitup training and validation data, 75/25; shuffle D to ensure
-        # uniform distribution
+        # uniform distribution; essentially, we are doing 4-fold cross
+        # validation (as our resampling technique), except we are resampling
+        # across each run of the program, not within the 'train' method itself
         random.shuffle(D)
         v_split = int(0.75 * len(D))
         train_data = D[:v_split]
@@ -330,8 +316,8 @@ class DAggerClassifier(RecurrentClassifier):
                     # TODO: Uncomment the below Boolean expression, as this
                     # is currently adding EVERY
                     #if True: #c_action == o_action:
-                    # TODO: Next, do "if True:"
-                    if c_action != o_action:
+                    # NOTE: Modified original condition for adding
+                    if False: #c_action == o_action:
 
                         # Add classification example (from oracle)
                         clf_example = (f, o_action)
@@ -341,8 +327,10 @@ class DAggerClassifier(RecurrentClassifier):
                     y_partial_construct.append(c_action)
 
             # Store history of all learned policies, as well as Learn a new
-            # classifier from aggregate data!
-            if h_current is not h_oracle: h_history.append(h_learned)
+            # classifier from aggregate data! Also, only add policy to history
+            # if it's not an oracle policy
+            if not isinstance(h_current, self.OraclePolicy):
+                h_history.append(h_learned)
             h_learned = self.LearnedPolicy(self._L)
 
         # Find best learned classifier based on validation data

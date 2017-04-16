@@ -61,17 +61,7 @@ weights_dir = "weights/"
 
 # TODO: Update this to new data object
 def run_sp(raw_train_test, update_limit, b_limit, data_limit, report_name):
-    """
-    Run: Training function
-    Data: Handwritten words and text-to-speech
-    Setup (for both handwriting and text-to-speech mapping) problems:
-        0. Establish model parameters
-        1. Parse training and testing data
-        2. Train structured perceptron on training data
-        3. Test on testing data
-    Assumptions:
-        0. All data in form "000001010101010101..." "[label]"
-    """
+    """ Train and test Structured Perceptron """
 
     stat_reports = []
 
@@ -124,21 +114,22 @@ def run_sp(raw_train_test, update_limit, b_limit, data_limit, report_name):
                     # Write report to file
                     write_report(report, report_name)
 
-def run_rc(data):
+def run_rc(data, email_results = False):
     """ Train and test our recurrent classifiers """
 
     # Get email stuff at beginning
-    #email = input("Email address: ")
-    #password = input("Email password: ")
+    if email_results:
+        email = input("Email address: ")
+        password = input("Email password: ")
 
-    for dset in data.parsed[1:]:
+    for dset in data.parsed[:1]:
 
         # Construct list of classifiers
         clfs = [ImitationClassifier(dset.alphabet, dset.len_x), \
                 DAggerClassifier(dset.alphabet, dset.len_x, beta = 0.5)]
 
         # Run through each classifier
-        for c in clfs[:1]:
+        for c in clfs[1:]:
 
             print("Dataset = {}".format(dset.__name__))
 
@@ -152,15 +143,28 @@ def run_rc(data):
             print("{} minutes elapsed".format(time_elapsed))
 
             # Send me an email update
-            subject = "[CptS 580] {} on {}".format(c.__name__, dset.__name__)
-            body = "train = {}%\ntest = {}%\ntime = {} min".format(\
-                round(train_acc * 100, 2), round(test_acc * 100, 2), time_elapsed)
-
-            #send_email(email, password, subject, body)
-            #print("Email sent to {}\n".format(email))
+            if email_results:
+                subject = "[CptS 580] {} on {}".format(c.__name__, dset.__name__)
+                body = "train = {}%\ntest = {}%\ntime = {} min".format(\
+                    round(train_acc * 100, 2), round(test_acc * 100, 2), time_elapsed)
+                send_email(email, password, subject, body)
+                print("Email sent to {}\n".format(email))
 
 def main():
-    """ Driver function """
+    """
+    Goal: Accurately predict structured outputs from structured inputs
+    Data: Handwritten words and text-to-speech
+    Setup (for both handwriting and text-to-speech mapping) problems:
+        0. Establish model parameters
+        1. Parse training and testing data
+        2. Train structured perceptron on training data
+        3. Test on testing data
+    Assumptions:
+        0. All data in form "000001010101010101..." "[label]"
+    """
+
+    # Because we like to live dangerously
+    sys.setrecursionlimit(3000)
 
     # Parse training and testing data
     data = Data(data_dir = "data/")

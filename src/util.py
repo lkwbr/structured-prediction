@@ -90,7 +90,7 @@ def dprint(s):
 
 def setify(num):
     """
-    Set-ify that number (i.e. remove trailing zeros, as is
+    Set-ify that number (i.e. remove leading zeros, as is
     automatically done in the alphabet set) for consistency
     """
 
