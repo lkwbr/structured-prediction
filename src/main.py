@@ -119,18 +119,23 @@ def run_rc(data, email_results = False):
 
     # Get email stuff at beginning
     if email_results:
+        print()
         email = input("Email address: ")
         password = input("Email password: ")
+        print("Updates will be sent to {}!".format(email))
+    print()
 
-    for dset in data.parsed[:1]:
+    for dset in data.parsed[1:]:
 
         # Construct list of classifiers
-        clfs = [ImitationClassifier(dset.alphabet, dset.len_x), \
-                DAggerClassifier(dset.alphabet, dset.len_x, beta = 0.5)]
+        clfs = [ImitationClassifier(dset.alphabet, dset.len_x)]
+        clfs += [DAggerClassifier(dset.alphabet, dset.len_x, beta = b / 10) \
+            for b in range(5, 11)]
 
         # Run through each classifier
         for c in clfs[1:]:
 
+            print("Classifier = {}".format(c.__name__))
             print("Dataset = {}".format(dset.__name__))
 
             # Train and test
@@ -140,7 +145,7 @@ def run_rc(data, email_results = False):
 
             # Show time elapsed
             time_elapsed = round(((time.time() - ts) / 60), 2) # minutes
-            print("{} minutes elapsed".format(time_elapsed))
+            print("({} minutes elapsed)".format(time_elapsed))
 
             # Send me an email update
             if email_results:
@@ -148,7 +153,8 @@ def run_rc(data, email_results = False):
                 body = "train = {}%\ntest = {}%\ntime = {} min".format(\
                     round(train_acc * 100, 2), round(test_acc * 100, 2), time_elapsed)
                 send_email(email, password, subject, body)
-                print("Email sent to {}\n".format(email))
+                print("(Email sent to {})".format(email))
+            print()
 
 def main():
     """
@@ -170,7 +176,7 @@ def main():
     data = Data(data_dir = "data/")
 
     # Run recurrent classifier
-    run_rc(data)
+    run_rc(data, email_results = False)
 
 # Party = started
 main()

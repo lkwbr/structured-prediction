@@ -11,6 +11,9 @@ the paper Structured Prediction via Output Space Search [3] for comparison
 [3] http://jmlr.org/papers/volume15/doppa14a/doppa14a.pdf
 """
 
+# TODO: Investigate OCR overfitting
+# TODO: Address issues with not seeing improvement with the DAgger algorithm
+
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import svm
@@ -165,24 +168,24 @@ class RecurrentClassifier(Model):
         # Compute and report accuracies
         recurrent_hamming_accuracy = (1.0 - (recurrent_hamming_loss / len(D)))
         oracle_hamming_accuracy = (1.0 - (oracle_hamming_loss / len(D)))
-        print("Done: Oracle (Hamming) accuracy is {}%".format(round(oracle_hamming_accuracy * 100)))
-        print("Done: Recurrent (Hamming) accuracy is {}%\n".format(round(recurrent_hamming_accuracy * 100)))
+        print("\tDone: Oracle (Hamming) accuracy is {}%".format( \
+            round(oracle_hamming_accuracy * 100)))
+        print("\tDone: Recurrent (Hamming) accuracy is {}%\n".format( \
+            round(recurrent_hamming_accuracy * 100)))
 
         return recurrent_hamming_accuracy
 
     # NOTE: Single underscore is used to prevent "name mangling", which will now
     # allow inhereting classes to use this method as their own
+
     def _generate_examples(self, D):
         """ Populate list of classification examples given by "expert" """
 
-        seen_set = set()
+        # NOTE: Sparsifying the data set L -- allowing only unique data entries
+        # -- did not help with overfitting, and in fact decreased performance
 
         # Through each training example
         for x, y in D[:]:
-
-            # TODO: See if this helps overfitting
-            #if "".join(y) in seen_set: continue
-            seen_set.add("".join(y))
 
             # Add training example for each left-anchored subset of the
             # structured output y; (left-anchored subsets: "h", "he", "hey")
@@ -192,8 +195,6 @@ class RecurrentClassifier(Model):
                 y_t = y[t]
                 y_partial = y[:t]
                 if t == 0: y_partial = [self._dummy_label]
-
-                #print("".join(y_partial), y_t, flush = True)
 
                 # Generate features, package up, and append to list
                 f = self._phi(x, y_partial)
@@ -213,8 +214,6 @@ class ImitationClassifier(RecurrentClassifier):
     @overrides(RecurrentClassifier)
     def train(self, D, *args):
 
-        # TODO: Investigate OCR overfitting
-
         print("Generating examples...", flush = True)
         self._generate_examples(D)
 
@@ -227,7 +226,7 @@ class ImitationClassifier(RecurrentClassifier):
 
         # Training accuracy
         oracle_hamming_accuracy = self._policy.score()
-        print("Done: Oracle (Hamming) accuracy is {}%\n".format( \
+        print("\tDone: Oracle (Hamming) accuracy is {}%".format( \
             round(oracle_hamming_accuracy * 100)))
         return oracle_hamming_accuracy
 
@@ -241,8 +240,6 @@ class DAggerClassifier(RecurrentClassifier):
     training on trajectories that are not optimal, but also providing a direction
     for them to go to recover
     """
-
-    # TODO: Address issues with not seeing improvement with the DAgger algorithm
 
     __name__ = "DAggerRecurrentClassifier"
 
@@ -268,6 +265,8 @@ class DAggerClassifier(RecurrentClassifier):
         train_data = D[:v_split]
         validation_data = D[v_split:]
 
+        print("Beta = {}".format(self._beta), flush = True)
+
         # As if oracle classifier is giving us trajectories
         print("Generating examples...", flush = True)
         self._generate_examples(train_data)
@@ -278,7 +277,8 @@ class DAggerClassifier(RecurrentClassifier):
         # Instantiate initial classifier
         h_learned = self.LearnedPolicy(self._L)
         h_oracle = self.OraclePolicy(self._L)
-        h_history = [] # History of learned classifiers through iterations
+        h_history = []              # Learned classifiers through iterations
+        recurrent_acc_history = []  # Recurrent accuracies throughout iterations
         beta_const = self._beta
 
         # Data aggregation iterations
@@ -290,8 +290,9 @@ class DAggerClassifier(RecurrentClassifier):
             h_current = self._choose_policy(h_oracle, h_learned)
             print("\t", j + 1, d_max, h_current.__name__, len(h_current._L), \
                 "beta = {}".format(self._beta), flush = True)
+            recurrent_hamming_loss = 0
 
-            for x, y in train_data[:]:
+            for x, y in train_data:
 
                 # Structured output we're going to be building up; note that
                 # this is considered the current policy's trajectory
@@ -313,11 +314,10 @@ class DAggerClassifier(RecurrentClassifier):
                     # NOTE: Having an oracle policy here isn't doing much
                     c_action = h_current.action(f, y_star)  # Predicted action
                     o_action = h_oracle.action(f, y_star)   # Oracle action
-                    # TODO: Uncomment the below Boolean expression, as this
-                    # is currently adding EVERY
-                    #if True: #c_action == o_action:
-                    # NOTE: Modified original condition for adding
-                    if False: #c_action == o_action:
+
+                    # NOTE: Collecting these examples does not seem to bring
+                    # much improvment at all
+                    if c_action == o_action:
 
                         # Add classification example (from oracle)
                         clf_example = (f, o_action)
@@ -326,6 +326,10 @@ class DAggerClassifier(RecurrentClassifier):
                     # Add to policy trajectory
                     y_partial_construct.append(c_action)
 
+                # Collect recurrent Hamming loss
+                recurrent_num_wrong_labels = list_diff(y, y_partial_construct)
+                recurrent_hamming_loss += recurrent_num_wrong_labels / len(y)
+
             # Store history of all learned policies, as well as Learn a new
             # classifier from aggregate data! Also, only add policy to history
             # if it's not an oracle policy
@@ -333,8 +337,12 @@ class DAggerClassifier(RecurrentClassifier):
                 h_history.append(h_learned)
             h_learned = self.LearnedPolicy(self._L)
 
+            # Collect recurrent accuracy history
+            recurrent_hamming_accuracy = (1.0 - (recurrent_hamming_loss / len(D)))
+            recurrent_acc_history.append(recurrent_hamming_accuracy)
+
         # Find best learned classifier based on validation data
-        print("Determining best learned policy to pick...")
+        print("Determining best learned policy to pick...", flush = True)
         h_best_tup = (None, -1)
         disable_stdout()
         for h in h_history:
@@ -343,12 +351,18 @@ class DAggerClassifier(RecurrentClassifier):
             if acc > h_best_tup[1]: h_best_tup = (h, acc)
         enable_stdout()
 
-        # Set our policy to the max learned classifier
-        self._policy = h_best_tup[0]
+        # Set our policy to the max learned classifier; handle the case
+        # when only oracle classifiers ran through the iterations
+        if len(h_history) == 0: self._policy = self.LearnedPolicy(self._L)
+        else: self._policy = h_best_tup[0]
 
         # Training accuracy
         oracle_hamming_accuracy = self._policy.score()
-        print("Done: Oracle (Hamming) accuracy is {}%\n".format( \
+        recurrent_acc_history_str = list(map(lambda x: str(round(x, 2)), \
+            recurrent_acc_history))
+        print("\tDone: Recurrent (Hamming) accuracy over {} iterations = {}" \
+            .format(d_max, ", ".join(recurrent_acc_history_str)))
+        print("\tDone: Oracle (Hamming) accuracy is {}%".format( \
             round(oracle_hamming_accuracy * 100)))
         return oracle_hamming_accuracy
 
