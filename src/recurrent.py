@@ -30,7 +30,7 @@ class RecurrentClassifier(Model):
 
     __name__ = "RecurrentClassifier"
 
-    def __init__(self, alphabet, len_x, phi_order = 2):
+    def __init__(self, alphabet, len_x, phi_order = 1):
 
         # Have parent do their thing
         super().__init__(alphabet, len_x, phi_order)

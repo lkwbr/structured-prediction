@@ -13,16 +13,16 @@ class Model:
 
     def __init__(self, alphabet, len_x, phi_order):
 
+        # Label stuff
+        self._label_len = len(min(alphabet, key = len))
+        self._dummy_label = "$" * self._label_len
+        alphabet.add(self._dummy_label)
+
         # Structure-related
         self._alphabet = alphabet
         self._len_x = len_x
         self._len_y = len(alphabet)
         self._convergence_range = 1 # Considering accuracy range [0, 100]
-
-        # Label stuff
-        self._label_len = len(min(alphabet, key = len))
-        self._dummy_label = "$" * self._label_len
-        alphabet.add(self._dummy_label)
 
         # Phi: joint-feature function
         self._phi_order = phi_order
@@ -98,6 +98,13 @@ class Model:
 
         # Collect features within phi's order
         features = np.zeros((self._phi_dimen))
+
+        # TODO: Remove limiting y
+        # NOTE: By limiting the scopy of labels to a small history H, we may
+        # prevent overfitting
+        history_len = 3
+        y = y[-history_len:]
+        x = x[-history_len:]
 
         # Unary features
         for i in range(len(y)):

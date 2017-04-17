@@ -125,7 +125,8 @@ def run_rc(data, email_results = False):
         print("Updates will be sent to {}!".format(email))
     print()
 
-    for dset in data.parsed[1:]:
+    # Through data sets
+    for dset in data.parsed[:]:
 
         # Construct list of classifiers
         clfs = [ImitationClassifier(dset.alphabet, dset.len_x)]
@@ -133,7 +134,7 @@ def run_rc(data, email_results = False):
             for b in range(5, 11)]
 
         # Run through each classifier
-        for c in clfs[1:]:
+        for c in clfs[:1]:
 
             print("Classifier = {}".format(c.__name__))
             print("Dataset = {}".format(dset.__name__))
