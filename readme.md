@@ -1,5 +1,5 @@
 # StructuredPerceptron
-Implementation of generalized Perceptron, extended for structured inputs and structured outputs. We now are training on text-to-speech and handwriting data.
+Here are implementations for some of the most popular Structured Prediction algorithms, such as LaSO, Generalized Perceptron, AggreVaTe, DAgger, etc. Highest accuracy on OCR and NETTALK training data is around 80%.
 
 ### Results
 * Handwriting recognition data (OCR): *To be announced*
